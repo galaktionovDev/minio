@@ -1,4 +1,8 @@
 ---
+- name: Derive datadirs from minio_extra_disks (if not provided)
+  set_fact:
+    minio_server_datadirs: "{{ minio_server_datadirs | default(minio_extra_disks | map(attribute='mount') | list) }}"
+
 - name: "Preconf | Prepare data disks"
   import_tasks: pre_conf_disks.yml
   when:

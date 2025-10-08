@@ -72,7 +72,7 @@ minio_users: []
 #    password: supers1cret0
 
 # Minio client
-minio_validate_certificate: true
+minio_validate_certificate: false
 minio_alias: "myminio"
 
 # Prometheus bearer token
