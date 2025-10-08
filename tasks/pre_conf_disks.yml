@@ -1,3 +1,32 @@
+- name: "Preconf | Определить все доступные блочные устройства"
+  command: "lsblk -nr -o NAME,TYPE,MOUNTPOINT"
+  register: _lsblk_raw
+  changed_when: false
+
+- name: "Preconf | Получить список несистемных дисков"
+  set_fact:
+    _available_disks: >-
+      {{
+        _lsblk_raw.stdout_lines
+        | map('split')
+        | selectattr('1', 'equalto', 'disk')
+        | rejectattr('2', 'defined')
+        | map('first')
+        | map('regex_replace', '^(.*)$', '/dev/\\1')
+        | list
+      }}
+
+- name: "Preconf | Исключить системный диск (vda и др.)"
+  set_fact:
+    minio_preconf_data_devices: >-
+      {{
+        _available_disks
+        | reject('search', 'vda')
+        | reject('search', 'nvme0n1')
+        | list
+      }}
+  when: minio_preconf_data_devices is not defined
+
 - name: "Preconf | Проверка входных данных"
   assert:
     that:
