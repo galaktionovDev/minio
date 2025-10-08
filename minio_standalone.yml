@@ -1,0 +1,5 @@
+- name: Deploy standalone MinIO
+  hosts: all
+  become: yes
+  roles:
+    - role: .

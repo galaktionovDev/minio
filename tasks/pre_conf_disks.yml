@@ -1,0 +1,70 @@
+- name: "Preconf | Проверка входных данных"
+  assert:
+    that:
+      - minio_server_datadirs is defined
+      - minio_server_datadirs | length > 0
+      - minio_preconf_data_devices is defined
+      - minio_preconf_data_devices | length >= (minio_server_datadirs | length)
+    fail_msg: "Нужно передать minio_preconf_data_devices и minio_server_datadirs (длины должны совпадать)."
+
+- name: "Preconf | Сопоставить устройства и точки монтирования"
+  set_fact:
+    _disk_map: "{{ dict(minio_preconf_data_devices[0:(minio_server_datadirs|length)] | zip(minio_server_datadirs)) }}"
+
+- name: "Preconf | Установить необходимые пакеты"
+  package:
+    name: [gdisk, xfsprogs]
+    state: present
+
+- name: "Preconf | Создать пользователя minio (если нет)"
+  user:
+    name: "{{ minio_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+  vars:
+    minio_user: "{{ minio_user | default('minio') }}"
+
+- name: "Preconf | Подготовить каждый диск"
+  block:
+    - name: "Disk | Размонтировать, если вдруг смонтирован"
+      shell: |
+        set -euo pipefail
+        dev="{{ item.key }}"
+        mnts=$(lsblk -nr -o MOUNTPOINT "$dev" | awk 'NF' || true)
+        if [ -n "$mnts" ]; then
+          while read -r m; do umount -f "$m" || true; done <<< "$mnts"
+        fi
+      args: {executable: /bin/bash}
+
+    - name: "Disk | WipeFS (опц.)"
+      command: "wipefs -af {{ item.key }}"
+      when: minio_preconf_wipe_disks | default(false)
+
+    - name: "FS | Создать XFS (reflink=0) на устройстве"
+      filesystem:
+        fstype: xfs
+        dev: "{{ item.key }}"
+        force: true
+        opts: "-m reflink=0"
+
+    - name: "FS | Создать каталог монтирования"
+      file:
+        path: "{{ item.value }}"
+        state: directory
+        owner: "{{ minio_user | default('minio') }}"
+        group: "{{ minio_group | default('minio') }}"
+        mode: "0750"
+
+    - name: "FS | Получить UUID"
+      command: "blkid -o value -s UUID {{ item.key }}"
+      register: _blk
+      changed_when: false
+
+    - name: "Mount | Прописать в fstab и смонтировать"
+      mount:
+        path: "{{ item.value }}"
+        src: "UUID={{ _blk.stdout | trim }}"
+        fstype: xfs
+        opts: "defaults,noatime,nodiratime"
+        state: mounted
+  loop: "{{ _disk_map | dict2items }}"
