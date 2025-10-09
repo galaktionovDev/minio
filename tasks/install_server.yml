@@ -5,9 +5,13 @@
     _minio_server_download_url: "https://dl.minio.io/server/minio/release/linux-{{ go_arch }}/archive/minio.{{ minio_server_version }}"
 
 - name: Get the Minio server checksum for architecture {{ go_arch }}
-  set_fact:
-    _minio_server_checksum: "{{ lookup('url', _minio_server_download_url + '.sha256sum').split(' ')[0] }}"
+  shell: "curl -s {{ _minio_server_download_url }}.sha256sum | awk '{print $1}'"
+  register: minio_checksum
+  changed_when: false
 
+- name: Store checksum fact
+  set_fact:
+    _minio_server_checksum: "{{ minio_checksum.stdout }}"
 
 - name: Create Minio group
   group:
