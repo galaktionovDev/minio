@@ -18,19 +18,4 @@
 - name: Create Minio Buckets
   include_tasks: create_minio_buckets.yml
   when: minio_buckets | length > 0
-
-- name: Create Minio Users
-  include_tasks: create_minio_user.yml
-  with_items:
-    - "{{ minio_users }}"
-  loop_control:
-    loop_var: "user"
-
-- name: Configure Minio Site Replication
-  include_tasks: configure_site_replication.yml
-  when: replication_sites | length > 0
-
-# Create Prometheus bearer token
-- name: Create Prometheus bearer token
-  include_tasks: create_prometheus_bearer_token.yml
-  when: minio_prometheus_bearer_token
+  

@@ -1,6 +1,6 @@
 ---
-- name: "Preconf | Определить все доступные блочные устройства"
-  command: "lsblk -nr -o NAME,TYPE,MOUNTPOINT"
+- name: "Preconf | Определить все доступные блочные устройства (disk, без монтирования)"
+  command: "lsblk -dn -o NAME,TYPE,MOUNTPOINT"
   register: _lsblk_raw
   changed_when: false
 
@@ -13,7 +13,7 @@
         | selectattr('1', 'equalto', 'disk')
         | rejectattr('2', 'defined')
         | map('first')
-        | map('regex_replace', '^(.*)$', '/dev/\\1')
+        | map('regex_replace', '^', '/dev/')
         | list
       }}
 
@@ -30,7 +30,7 @@
   when: minio_preconf_data_devices is not defined
 
 - name: "Preconf | Проверка входных данных"
-  assert:
+  ansible.builtin.assert:
     that:
       - minio_server_datadirs is defined
       - minio_server_datadirs | length > 0
