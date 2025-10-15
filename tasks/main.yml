@@ -25,3 +25,23 @@
   when: minio_url|length > 0 and minio_install_client
   # run once per cluster
   run_once: true
+
+- name: "Compose MinIO URLs"
+  ansible.builtin.set_fact:
+    _minio_addr: "{{ minio_server_address | default(ansible_default_ipv4.address | default('127.0.0.1')) }}"
+    _minio_scheme: "{{ (minio_enable_tls | default(false)) | ternary('https','http') }}"
+    minio_s3_url: "{{ _minio_scheme }}://{{ _minio_addr }}:{{ minio_server_port }}"
+    minio_console_url: "{{ _minio_scheme }}://{{ _minio_addr }}:{{ minio_console_port }}"
+
+- name: "Publish outputs for CloudLink"
+  ansible.builtin.set_stats:
+    data:
+      # основное
+      connection_url: "{{ minio_s3_url }}"
+      console_url: "{{ minio_console_url }}"
+      access_key: "{{ minio_root_user }}"
+      # удобная строка для быстрой настройки mc у клиента
+      mc_quickstart: >-
+        {{ (mc_command | default('/usr/local/bin/mc --insecure')) }}
+        alias set myminio {{ minio_s3_url }} {{ minio_root_user }} {{ minio_root_password }}
+  run_once: true
