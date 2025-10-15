@@ -26,22 +26,23 @@
   # run once per cluster
   run_once: true
 
+# Гарантированно без _minio_scheme и прочих неожиданных переменных
 - name: "Compose MinIO URLs"
   ansible.builtin.set_fact:
-    _minio_addr: "{{ minio_server_address | default(ansible_default_ipv4.address | default('127.0.0.1')) }}"
-    _minio_scheme: "{{ (minio_enable_tls | default(false)) | ternary('https','http') }}"
-    minio_s3_url: "{{ _minio_scheme }}://{{ _minio_addr }}:{{ minio_server_port }}"
-    minio_console_url: "{{ _minio_scheme }}://{{ _minio_addr }}:{{ minio_console_port }}"
+    # берём minio_url, который уже выставляется в install_server.yml,
+    # иначе собираем из известных полей
+    minio_connection_url: >-
+      {{ minio_url
+         | default('http://' ~ (minio_server_address | default(ansible_host | default(inventory_hostname)))
+         ~ ':' ~ (minio_server_port | default(9000))) }}
+    # console_url = тот же хост/схема, другой порт
+    minio_console_url: >-
+      {{ (minio_connection_url | regex_replace(':[0-9]+$', ':' ~ (minio_console_port | default(9001)))) }}
 
-- name: "Publish outputs for CloudLink"
+- name: "Publish outputs to CloudLink"
+  run_once: true
   ansible.builtin.set_stats:
     data:
-      # основное
-      connection_url: "{{ minio_s3_url }}"
+      connection_url: "{{ minio_connection_url }}"
       console_url: "{{ minio_console_url }}"
-      access_key: "{{ minio_root_user }}"
-      # удобная строка для быстрой настройки mc у клиента
-      mc_quickstart: >-
-        {{ (mc_command | default('/usr/local/bin/mc --insecure')) }}
-        alias set myminio {{ minio_s3_url }} {{ minio_root_user }} {{ minio_root_password }}
-  run_once: true
+      root_user: "{{ minio_root_user }}"
