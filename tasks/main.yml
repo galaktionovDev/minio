@@ -26,7 +26,6 @@
   # run once per cluster
   run_once: true
 
-# Требуется gather_facts: true
 - name: Compute client host
   set_fact:
     minio_client_host: "{{ machine.default_v4_address | default(ansible_host, true) }}"
