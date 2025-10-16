@@ -26,23 +26,16 @@
   # run once per cluster
   run_once: true
 
-# Гарантированно без _minio_scheme и прочих неожиданных переменных
-- name: "Compose MinIO URLs"
-  ansible.builtin.set_fact:
-    # берём minio_url, который уже выставляется в install_server.yml,
-    # иначе собираем из известных полей
-    minio_connection_url: >-
-      {{ minio_url
-         | default('http://' ~ (minio_server_address | default(ansible_host | default(inventory_hostname)))
-         ~ ':' ~ (minio_server_port | default(9000))) }}
-    # console_url = тот же хост/схема, другой порт
-    minio_console_url: >-
-      {{ (minio_connection_url | regex_replace(':[0-9]+$', ':' ~ (minio_console_port | default(9001)))) }}
+# Требуется gather_facts: true
+- name: Compute client host
+  set_fact:
+    minio_client_host: "{{ machine.default_v4_address | default(ansible_host, true) }}"
 
-- name: "Publish outputs to CloudLink"
-  run_once: true
-  ansible.builtin.set_stats:
+- name: Export connection data
+  set_stats:
     data:
-      connection_url: "{{ minio_connection_url }}"
-      console_url: "{{ minio_console_url }}"
-      root_user: "{{ minio_root_user }}"
+      connection_url: "http://{{ minio_client_host }}:{{ minio_server_port | default(9000, true) }}"
+      console_url:    "http://{{ minio_client_host }}:{{ minio_console_port | default(9001, true) }}"
+      access_key:     "{{ minio_root_user }}"
+      mc_quickstart:  "{{ mc_quickstart | default(false) }}"
+  run_once: true
