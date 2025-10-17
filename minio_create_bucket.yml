@@ -6,4 +6,4 @@
     - name: Run bucket-only taskfile from role "."
       import_role:
         name: .
-        tasks_from: create_bucket.yml
+        tasks_from: create_minio_buckets.yml

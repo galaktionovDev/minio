@@ -48,8 +48,8 @@
   register: _mb
   changed_when: "'created' in (_mb.stdout | lower)"
 
-- name: Export result for CloudLink
-  ansible.builtin.set_stats:
-    data:
-      bucket_name: "{{ bucket_name }}"
-      bucket_url:  "{{ connection_url }}/{{ bucket_name }}"
+# - name: Export result for CloudLink
+#   ansible.builtin.set_stats:
+#     data:
+#       bucket_name: "{{ bucket_name }}"
+#       bucket_url:  "{{ connection_url }}/{{ bucket_name }}"
