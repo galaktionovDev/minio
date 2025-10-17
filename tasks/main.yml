@@ -36,5 +36,5 @@
       connection_url: "http://{{ minio_client_host }}:{{ minio_server_port | default(9000, true) }}"
       console_url:    "http://{{ minio_client_host }}:{{ minio_console_port | default(9001, true) }}"
       access_key:     "{{ minio_root_user }}"
-      mc_quickstart:  "{{ mc_quickstart | default(false) }}"
+      # mc_quickstart:  "{{ mc_quickstart | default(false) }}"
   run_once: true

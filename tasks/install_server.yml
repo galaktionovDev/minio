@@ -109,12 +109,12 @@
     enabled: true
     state: started
 
-- name: Set secure minio url if not defined
-  set_fact:
-    minio_url: "https://{{ minio_server_address | default('127.0.0.1') }}:{{ minio_server_port }}"
-  when: minio_enable_tls and minio_url | length == 0
+# - name: Set secure minio url if not defined
+#   set_fact:
+#     minio_url: "https://{{ minio_server_address | default('127.0.0.1') }}:{{ minio_server_port }}"
+#   when: minio_enable_tls and minio_url | length == 0
 
-- name: Set unsecure minio_url if not defined
-  set_fact:
-    minio_url: "http://{{ minio_server_address | default('127.0.0.1') }}:{{ minio_server_port }}"
-  when: not minio_enable_tls and minio_url | length == 0
+# - name: Set unsecure minio_url if not defined
+#   set_fact:
+#     minio_url: "http://{{ minio_server_address | default('127.0.0.1') }}:{{ minio_server_port }}"
+#   when: not minio_enable_tls and minio_url | length == 0

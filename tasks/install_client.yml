@@ -22,3 +22,16 @@
   apt:
     deb: "{{ _minio_client_deb_path }}"
     state: present
+
+- name: Detect mcli binary
+  stat:
+    path: "/usr/bin/mcli"
+  register: _mcli
+
+- name: Ensure mc compatibility symlink
+  file:
+    src: "/usr/bin/mcli"
+    dest: "/usr/local/bin/mc"
+    state: link
+    force: true
+  when: _mcli.stat.exists

@@ -1,0 +1,24 @@
+nexus_url: "https://nexus.blue04.a2cloud.dev.box"
+
+minio_root_user: "minioadmin"
+minio_root_password: "ChangeMe_S3cr3t_123"
+
+minio_server_deb_url: "{{ nexus_url }}/repository/products-raw/minio/minio_20250907161309.0.0_amd64.deb"
+minio_client_deb_url: "{{ nexus_url }}/repository/products-raw/minio/mcli_20250813083541.0.0_amd64.deb"
+
+minio_server_port: 9000
+minio_console_port: 9001
+
+minio_extra_disks:
+  - device: /dev/vdb
+    fstype: xfs
+    mount: /app/disk1
+  - device: /dev/vdc
+    fstype: xfs
+    mount: /app/disk2
+  - device: /dev/vdd
+    fstype: xfs
+    mount: /app/disk3
+
+minio_install_server: true
+minio_install_client: true
