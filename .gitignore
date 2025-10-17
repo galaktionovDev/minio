@@ -1,0 +1,15 @@
+# Игнорируем файлы-зоны NTFS
+*.Zone.Identifier
+
+# Общие временные и системные файлы
+*.swp
+*.bak
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# Каталоги Ansible и временные данные
+.ansible/
+__pycache__/
+*.retry
