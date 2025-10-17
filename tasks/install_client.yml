@@ -23,15 +23,29 @@
     deb: "{{ _minio_client_deb_path }}"
     state: present
 
-- name: Detect mcli binary
+- name: Detect mcli path candidates
   stat:
-    path: "/usr/bin/mcli"
-  register: _mcli
+    path: "{{ item }}"
+  loop:
+    - /usr/local/bin/mcli
+    - /usr/bin/mcli
+  register: mcli_candidates
+
+- name: Pick existing mcli path
+  set_fact:
+    _mcli_path: "{{ (mcli_candidates.results
+                      | selectattr('stat.exists','eq',true)
+                      | map(attribute='stat.path')
+                      | list | first) | default('') }}"
+
+- name: Fail if mcli missing
+  fail:
+    msg: "mcli not found after package install"
+  when: _mcli_path == ''
 
 - name: Ensure mc compatibility symlink
   file:
-    src: "/usr/bin/mcli"
-    dest: "/usr/local/bin/mc"
+    src: "{{ _mcli_path }}"
+    dest: /usr/local/bin/mc
     state: link
     force: true
-  when: _mcli.stat.exists
