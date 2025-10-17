@@ -88,3 +88,8 @@ minio_venv_path: "/opt/minio-venv"
 # Version to install
 minio_server_version: "RELEASE.2025-09-07T16-13-09Z"
 minio_mc_version: "RELEASE.2025-08-13T08-35-41Z"
+
+minio_installer_dir: "/opt/minio/install"
+
+minio_server_deb_url: "{{ nexus_url }}/repository/products-raw/minio/minio_20250907161309.0.0_amd64.deb"
+minio_client_deb_url: "{{ nexus_url }}/repository/products-raw/minio/mcli_20250813083541.0.0_amd64.deb"
