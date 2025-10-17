@@ -1,4 +1,3 @@
----
 - name: Create MinIO bucket (action-only)
   hosts: all
   gather_facts: false
