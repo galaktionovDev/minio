@@ -1,0 +1,62 @@
+---
+- name: "Preconf | Определить все доступные блочные устройства (disk, без монтирования)"
+  command: "lsblk -dn -o NAME,TYPE,MOUNTPOINT"
+  register: _lsblk_raw
+  changed_when: false
+
+- name: "Preconf | Получить список несистемных дисков"
+  set_fact:
+    _available_disks: >-
+      {{
+        _lsblk_raw.stdout_lines
+        | map('split')
+        | selectattr('1', 'equalto', 'disk')
+        | rejectattr('2', 'defined')
+        | map('first')
+        | map('regex_replace', '^', '/dev/')
+        | list
+      }}
+
+- name: "Preconf | Исключить системный диск (vda, sda, nvme0n1)"
+  set_fact:
+    minio_preconf_data_devices: >-
+      {{
+        _available_disks
+        | reject('search', 'vda')
+        | reject('search', 'sda')
+        | reject('search', 'nvme0n1')
+        | list
+      }}
+  when: minio_preconf_data_devices is not defined
+
+- name: "Preconf | Проверка входных данных"
+  ansible.builtin.assert:
+    that:
+      - minio_server_datadirs is defined
+      - minio_server_datadirs | length > 0
+      - minio_preconf_data_devices is defined
+      - minio_preconf_data_devices | length >= (minio_server_datadirs | length)
+    fail_msg: "Нужно передать minio_preconf_data_devices и minio_server_datadirs (длины должны совпадать)."
+
+- name: "Preconf | Сопоставить устройства и точки монтирования"
+  set_fact:
+    _disk_map: "{{ dict(minio_preconf_data_devices[0:(minio_server_datadirs|length)] | zip(minio_server_datadirs)) }}"
+
+- name: "Preconf | Установить необходимые пакеты"
+  package:
+    name:
+      - gdisk
+      - xfsprogs
+    state: present
+
+- name: "Preconf | Создать пользователя minio (если нет)"
+  user:
+    name: "{{ minio_user | default('minio') }}"
+    system: true
+    shell: /usr/sbin/nologin
+
+- name: "Preconf | Подготовить каждый диск"
+  include_tasks: prepare_single_disk.yml
+  loop: "{{ _disk_map | dict2items }}"
+  loop_control:
+    loop_var: item
