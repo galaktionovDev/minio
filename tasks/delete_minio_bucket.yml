@@ -38,22 +38,26 @@
   no_log: true
   changed_when: false
 
-- name: List buckets to check existence
-  ansible.builtin.command: >
-    {{ _mc_bin }} ls {{ minio_alias | default('myminio') }}
-  register: _ls
+- name: Check bucket existence
+  command: "{{ _mc_bin }} --insecure stat {{ minio_alias }}/{{ bucket_name }}"
+  register: mc_stat
   failed_when: false
   changed_when: false
 
-- name: Mark existence
-  ansible.builtin.set_fact:
-    _bucket_exists: "{{ ( _ls.stdout is search('^\\s*\\S*\\s*'+ bucket_name + '/\\s*$', multiline=True) ) | bool }}"
+- name: Set exist flag
+  set_fact:
+    _bucket_exists: "{{ mc_stat.rc == 0 }}"
 
-- name: Remove bucket (force)
-  ansible.builtin.command: >
-    {{ _mc_bin }} rb --force {{ minio_alias | default('myminio') }}/{{ bucket_name }}
+- name: Empty bucket (objects + versions)
+  command: >
+    {{ _mc_bin }} --insecure rm -r --force --versions
+    {{ minio_alias }}/{{ bucket_name }}
   when: _bucket_exists
-  register: _rb
+  changed_when: true
+
+- name: Remove bucket
+  command: "{{ _mc_bin }} --insecure rb --force {{ minio_alias }}/{{ bucket_name }}"
+  when: _bucket_exists
   changed_when: true
 
 - name: Export result
