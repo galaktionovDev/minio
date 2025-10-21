@@ -1,0 +1,24 @@
+---
+- name: Compute client host
+  set_fact:
+    minio_client_host: "{{ machine.default_v4_address | default(ansible_host, true) | default(inventory_hostname, true) }}"
+
+- name: Compute MinIO URLs
+  set_fact:
+    minio_url: "{{ minio_url | default('http://' + minio_client_host + ':' + (minio_server_port | default(9000, true) | string)) }}"
+
+- name: Set insecure mc command
+  set_fact:
+    mc_command: "{{ minio_client_bin }} --insecure"
+  when: not minio_validate_certificate
+
+- name: Set secure mc command
+  set_fact:
+    mc_command: "{{ minio_client_bin }}"
+  when: minio_validate_certificate
+
+- name: Configure minio connection alias
+  command: "{{ mc_command }} alias set {{ minio_alias }} {{ minio_url }} {{ minio_root_user }} {{ minio_root_password }}"
+  register: alias_command
+  changed_when: false
+  failed_when: "'Added' not in alias_command.stdout and 'Updated' not in alias_command.stdout"

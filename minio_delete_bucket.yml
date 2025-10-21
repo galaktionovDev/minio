@@ -1,0 +1,7 @@
+- name: Delete MinIO bucket (action-only)
+  hosts: all
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: .
+        tasks_from: delete_minio_bucket.yml

@@ -1,0 +1,51 @@
+- name: Define MinIO client package path
+  set_fact:
+    _minio_client_deb_path: "{{ minio_installer_dir }}/minio-client.deb"
+
+- name: Ensure MinIO installer directory exists
+  file:
+    path: "{{ minio_installer_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Download the MinIO client package
+  get_url:
+    url: "{{ minio_client_deb_url }}"
+    dest: "{{ _minio_client_deb_path }}"
+    mode: "0644"
+  register: _download_client_package
+  until: _download_client_package is succeeded
+  retries: 5
+  delay: 2
+
+- name: Install MinIO client package
+  apt:
+    deb: "{{ _minio_client_deb_path }}"
+    state: present
+
+- name: Detect mcli path candidates
+  stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/local/bin/mcli
+    - /usr/bin/mcli
+  register: mcli_candidates
+
+- name: Pick existing mcli path
+  set_fact:
+    _mcli_path: "{{ (mcli_candidates.results
+                      | selectattr('stat.exists','eq',true)
+                      | map(attribute='stat.path')
+                      | list | first) | default('') }}"
+
+- name: Fail if mcli missing
+  fail:
+    msg: "mcli not found after package install"
+  when: _mcli_path == ''
+
+- name: Ensure mc compatibility symlink
+  file:
+    src: "{{ _mcli_path }}"
+    dest: /usr/local/bin/mc
+    state: link
+    force: true

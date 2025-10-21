@@ -1,0 +1,8 @@
+- name: Create MinIO bucket (action-only)
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Run bucket-only taskfile from role "."
+      import_role:
+        name: .
+        tasks_from: create_minio_buckets.yml

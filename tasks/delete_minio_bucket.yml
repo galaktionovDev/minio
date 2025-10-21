@@ -1,0 +1,63 @@
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - connection_url is defined and (connection_url | length) > 0
+      - access_key is defined and (access_key | length) > 0
+      - access_secret is defined and (access_secret | length) > 0
+      - bucket_name is defined and (bucket_name | length) > 0
+    fail_msg: "connection_url, access_key, access_secret, bucket_name must be provided"
+
+- name: Pick mc/mcli candidates
+  ansible.builtin.set_fact:
+    _mc_candidates:
+      - /usr/local/bin/mc
+      - /usr/bin/mc
+      - /usr/local/bin/mcli
+      - /usr/bin/mcli
+
+- name: Detect client binary
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ _mc_candidates }}"
+  register: _mc_stats
+
+- name: Select client binary
+  ansible.builtin.set_fact:
+    _mc_bin: "{{ (_mc_stats.results | selectattr('stat.exists','eq', true) | map(attribute='stat.path') | list | first) | default('') }}"
+
+- name: Fail if client missing
+  ansible.builtin.fail:
+    msg: "MinIO client (mc/mcli) not found in {{ _mc_candidates | join(', ') }}"
+  when: _mc_bin == ''
+
+- name: Configure MinIO alias
+  ansible.builtin.command: >
+    {{ _mc_bin }} alias set {{ minio_alias | default('myminio') }}
+    {{ connection_url }} {{ access_key }} {{ access_secret }}
+  no_log: true
+  changed_when: false
+
+- name: List buckets to check existence
+  ansible.builtin.command: >
+    {{ _mc_bin }} ls {{ minio_alias | default('myminio') }}
+  register: _ls
+  failed_when: false
+  changed_when: false
+
+- name: Mark existence
+  ansible.builtin.set_fact:
+    _bucket_exists: "{{ ( _ls.stdout is search('^\\s*\\S*\\s*'+ bucket_name + '/\\s*$', multiline=True) ) | bool }}"
+
+- name: Remove bucket (force)
+  ansible.builtin.command: >
+    {{ _mc_bin }} rb --force {{ minio_alias | default('myminio') }}/{{ bucket_name }}
+  when: _bucket_exists
+  register: _rb
+  changed_when: true
+
+- name: Export result
+  ansible.builtin.set_stats:
+    data:
+      bucket_name: "{{ bucket_name }}"
+      removed: "{{ _bucket_exists | default(false) }}"

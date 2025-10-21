@@ -1,0 +1,38 @@
+---
+- name: Derive datadirs from minio_extra_disks (if not provided)
+  set_fact:
+    minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
+
+- name: "Preconf | Prepare data disks"
+  include_tasks: prepare_disks.yml
+  when:
+    - minio_server_datadirs is defined
+    - (minio_server_datadirs | length) > 0
+
+# Install Minio Server
+- name: Install server
+  include_tasks: install_server.yml
+  when: minio_install_server
+
+# Install Minio Client
+- name: Install client
+  include_tasks: install_client.yml
+  when: minio_install_client
+
+# Configure server
+- name: Configure server
+  include_tasks: configure_server.yml
+  when: minio_url|length > 0 and minio_install_client
+  run_once: true
+
+- name: Compute client host
+  set_fact:
+    minio_client_host: "{{ machine.default_v4_address | default(ansible_host, true) }}"
+
+- name: Export connection data
+  set_stats:
+    data:
+      connection_url: "http://{{ minio_client_host }}:{{ minio_server_port | default(9000, true) }}"
+      console_url:    "http://{{ minio_client_host }}:{{ minio_console_port | default(9001, true) }}"
+      access_key:     "{{ minio_root_user }}"
+  run_once: true

@@ -1,0 +1,69 @@
+---
+# Install server, client or both
+minio_install_server: true
+minio_install_client: true
+
+# minio unix user
+minio_group: minio
+minio_user: minio
+
+# minio data directories
+minio_server_make_datadirs: true
+minio_server_datadirs:
+  - /var/lib/minio
+# Minio server cluster node list.
+minio_server_cluster_nodes: []
+
+# minio bin path
+minio_server_bin: "/usr/local/bin/minio"
+minio_client_bin: /usr/local/bin/mc
+
+# mino server config dirs
+minio_etc_dir: /etc/minio
+minio_cert_dir: "{{ minio_etc_dir }}/ssl"
+minio_policy_dir: "{{ minio_etc_dir }}/policy"
+# mino server env file
+minio_server_envfile: "{{ minio_etc_dir }}/minio.conf"
+
+# Minio server listen address
+minio_server_port: "9091"
+minio_server_addr: ""
+minio_console_port: "9092"
+
+# Additional environment variables to be set in minio server environment
+minio_server_env_extra: ""
+minio_site_region: "us-east-1"
+
+# Additional Minio server CLI options
+minio_server_opts: ""
+
+# Minio server url
+minio_url: ""
+
+# Minio credentials user and password
+minio_root_user: ""
+minio_root_password: ""
+
+# TLS
+minio_enable_tls: false
+minio_key: ""
+minio_cert: ""
+
+# Minio client
+minio_validate_certificate: false
+minio_alias: "myminio"
+
+# Environment variables to use when calling Pip
+minio_pip_environment_vars: {}
+
+# Path to minio virtual environment, created to avoid breakage with system managed python libraries
+minio_venv_path: "/opt/minio-venv"
+
+# Version to install
+minio_server_version: "RELEASE.2025-09-07T16-13-09Z"
+minio_mc_version: "RELEASE.2025-08-13T08-35-41Z"
+
+minio_installer_dir: "/opt/minio/install"
+
+minio_server_deb_url: "{{ nexus_url }}/repository/products-raw/minio/minio_20250907161309.0.0_amd64.deb"
+minio_client_deb_url: "{{ nexus_url }}/repository/products-raw/minio/mcli_20250813083541.0.0_amd64.deb"
