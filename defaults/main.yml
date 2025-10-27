@@ -26,9 +26,9 @@ minio_policy_dir: "{{ minio_etc_dir }}/policy"
 minio_server_envfile: "{{ minio_etc_dir }}/minio.conf"
 
 # Minio server listen address
-minio_server_port: "9091"
+minio_server_port: "9000"
 minio_server_addr: ""
-minio_console_port: "9092"
+minio_console_port: "9001"
 
 # Additional environment variables to be set in minio server environment
 minio_server_env_extra: ""

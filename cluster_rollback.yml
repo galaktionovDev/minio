@@ -1,0 +1,10 @@
+---
+- name: MinIO HA cluster rollback
+  hosts: minio_cluster
+  become: true
+  vars:
+    minio_destroy_data: true        # или false, если стирать нельзя
+    minio_remove_user: false
+  tasks:
+    - name: Include rollback
+      ansible.builtin.include_tasks: tasks/rollback.yml

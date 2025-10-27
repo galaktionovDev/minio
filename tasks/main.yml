@@ -1,38 +1,51 @@
 ---
 - name: Derive datadirs from minio_extra_disks (if not provided)
-  set_fact:
+  ansible.builtin.set_fact:
     minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
 
 - name: "Preconf | Prepare data disks"
-  include_tasks: prepare_disks.yml
+  ansible.builtin.include_tasks: prepare_disks.yml
   when:
     - minio_server_datadirs is defined
     - (minio_server_datadirs | length) > 0
 
+# Построение MINIO_VOLUMES для HA
+- name: Build HA MINIO_VOLUMES
+  ansible.builtin.include_tasks: build_cluster_volumes.yml
+  when: minio_config.minio_cluster_mode is defined and minio_config.minio_cluster_mode == 'High Availability'
+
 # Install Minio Server
 - name: Install server
-  include_tasks: install_server.yml
+  ansible.builtin.include_tasks: install_server.yml
   when: minio_install_server
 
 # Install Minio Client
 - name: Install client
-  include_tasks: install_client.yml
+  ansible.builtin.include_tasks: install_client.yml
   when: minio_install_client
 
 # Configure server
 - name: Configure server
-  include_tasks: configure_server.yml
-  when: minio_url|length > 0 and minio_install_client
+  ansible.builtin.include_tasks: configure_server.yml
+  when: minio_url | length > 0 and minio_install_client
   run_once: true
 
+# === Compute client host for links (первый узел) ===
+- name: Pick first cluster host
+  ansible.builtin.set_fact:
+    _first_host: "{{ (groups['minio_cluster'] | default(ansible_play_hosts_all)) | first }}"
+
 - name: Compute client host
-  set_fact:
-    minio_client_host: "{{ machine.default_v4_address | default(ansible_host, true) }}"
+  ansible.builtin.set_fact:
+    minio_client_host: >-
+      {{ hostvars[_first_host].ansible_host
+         | default(hostvars[_first_host].ansible_default_ipv4.address
+         | default(_first_host)) }}
 
 - name: Export connection data
-  set_stats:
+  ansible.builtin.set_stats:
     data:
-      connection_url: "http://{{ minio_client_host }}:{{ minio_server_port | default(9000, true) }}"
-      console_url:    "http://{{ minio_client_host }}:{{ minio_console_port | default(9001, true) }}"
-      access_key:     "{{ minio_root_user }}"
+      connection_url: "http://{{ minio_client_host }}:{{ minio_config.minio_server_port | default(minio_server_port | default(9000)) }}"
+      console_url:    "http://{{ minio_client_host }}:{{ minio_config.minio_console_port | default(minio_console_port | default(9001)) }}"
+      access_key:     "{{ minio_root_user | default(minio_config.minio_root_user) }}"
   run_once: true
