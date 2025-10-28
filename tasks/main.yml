@@ -2,6 +2,7 @@
 - name: Derive datadirs from minio_extra_disks (if not provided)
   ansible.builtin.set_fact:
     minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
+  when: (minio_extra_disks | default([])) | length > 0
 
 - name: "Preconf | Prepare data disks"
   ansible.builtin.include_tasks: prepare_disks.yml
@@ -9,10 +10,45 @@
     - minio_server_datadirs is defined
     - (minio_server_datadirs | length) > 0
 
+- name: Normalise deployment mode inputs
+  ansible.builtin.set_fact:
+    minio_cluster_mode_effective: >-
+      {{
+        (_mode_from_var if _mode_from_var | length > 0
+         else (_mode_from_config if _mode_from_config | length > 0
+               else 'Single Instance'))
+      }}
+    minio_cluster_mode_effective_normalised: "{{ minio_cluster_mode_effective | string | lower | trim }}"
+    minio_cluster_nodes_effective: >-
+      {{
+        (
+          (minio_cluster_nodes | default([], true))
+          if (minio_cluster_nodes | default([], true)) | length > 0
+          else (
+            minio_config.minio_cluster_nodes
+            | default(minio_server_cluster_nodes | default([]))
+          )
+        ) | list
+      }}
+  vars:
+    _mode_from_var: "{{ minio_cluster_mode | default('', true) | string | trim }}"
+    _mode_from_config: "{{ minio_config.minio_cluster_mode | default('', true) | string | trim }}"
+
+- name: Decide if High Availability is enabled
+  ansible.builtin.set_fact:
+    minio_ha_enabled: "{{ (minio_cluster_mode_effective_normalised in _ha_aliases) | bool }}"
+  vars:
+    _ha_aliases:
+      - high availability
+      - high-availability
+      - ha
+      - distributed
+      - cluster
+
 # Построение MINIO_VOLUMES для HA
 - name: Build HA MINIO_VOLUMES
   ansible.builtin.include_tasks: build_cluster_volumes.yml
-  when: minio_config.minio_cluster_mode is defined and minio_config.minio_cluster_mode == 'High Availability'
+  when: minio_ha_enabled | bool
 
 # Install Minio Server
 - name: Install server
@@ -33,13 +69,19 @@
 # === Compute client host for links (первый узел) ===
 - name: Pick first cluster host
   ansible.builtin.set_fact:
-    _first_host: "{{ (groups['minio_cluster'] | default(ansible_play_hosts_all)) | first }}"
+    _cluster_candidates: >-
+      {{
+        (minio_cluster_nodes_effective | default([]))
+        if (minio_cluster_nodes_effective | default([])) | length > 0
+        else (groups[minio_cluster_group] | default(ansible_play_hosts_all))
+      }}
+    _first_host: "{{ _cluster_candidates | first }}"
 
 - name: Compute client host
   ansible.builtin.set_fact:
     minio_client_host: >-
-      {{ hostvars[_first_host].ansible_host
-         | default(hostvars[_first_host].ansible_default_ipv4.address
+      {{ (hostvars[_first_host] | default({})).ansible_host
+         | default((hostvars[_first_host] | default({})).ansible_default_ipv4.address
          | default(_first_host)) }}
 
 - name: Export connection data

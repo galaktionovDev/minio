@@ -3,17 +3,18 @@
 
 - name: Collect cluster hosts
   ansible.builtin.set_fact:
-    _cluster_hosts: "{{ groups['minio_cluster'] | default(ansible_play_hosts_all) }}"
+    _cluster_hosts: >-
+      {{ (minio_cluster_nodes_effective | default([]))
+           if (minio_cluster_nodes_effective | default([])) | length > 0
+           else (groups[minio_cluster_group] | default(ansible_play_hosts_all)) }}
 
 - name: Build address list with fallbacks
   ansible.builtin.set_fact:
-    _addr_list: >-
-      {{ (_addr_list | default([])) + [
-          (hostvars[item].ansible_host
-            | default(hostvars[item].ansible_default_ipv4.address
-            | default(item)))
-        ] }}
+    _addr_list: "{{ (_addr_list | default([])) + [ _resolved_addr ] }}"
   loop: "{{ _cluster_hosts }}"
+  vars:
+    _hostvars: "{{ hostvars[item] | default({}) }}"
+    _resolved_addr: "{{ _hostvars.ansible_host | default(_hostvars.ansible_default_ipv4.address | default(item)) }}"
 
 - name: Ensure datadirs are present
   ansible.builtin.assert:

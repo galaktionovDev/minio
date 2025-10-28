@@ -1,4 +1,21 @@
 ---
+# General configuration compatibility layer
+# Some playbooks still pass a structured dictionary ``minio_config``.
+# Make sure it always exists so that attribute lookups using ``default`` do not fail.
+minio_config: {}
+
+# Deployment mode. When not provided defaults to a single-instance deployment.
+# Accepted values include ``Single Instance`` and ``High Availability`` (case
+# insensitive). The role keeps backwards compatibility with the legacy
+# ``minio_config`` dictionary when this variable is left empty.
+minio_cluster_mode: ""
+
+# Additional knobs for cluster deployments. When ``minio_cluster_nodes`` is
+# empty we will fall back to the inventory group defined in
+# ``minio_cluster_group`` or, ultimately, to ``ansible_play_hosts_all``.
+minio_cluster_group: minio_cluster
+minio_cluster_nodes: []
+
 # Install server, client or both
 minio_install_server: true
 minio_install_client: true
