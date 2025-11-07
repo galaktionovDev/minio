@@ -1,12 +1,12 @@
 ---
-- name: Install nginx for MinIO load balancing
+- name: Установить nginx для балансировки MinIO
   ansible.builtin.include_tasks: minio_lb_install.yml
 
-- name: Compile backend list for nginx
+- name: Сформировать список бэкендов для nginx
   ansible.builtin.include_tasks: minio_lb_build_backends.yml
 
-- name: Write nginx configuration for MinIO
+- name: Применить конфигурацию nginx для MinIO
   ansible.builtin.include_tasks: minio_lb_configure.yml
 
-- name: Apply pending handlers before leaving load balancer
+- name: Выполнить отложенные обработчики перед выходом
   ansible.builtin.meta: flush_handlers

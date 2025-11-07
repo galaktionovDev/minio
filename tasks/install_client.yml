@@ -1,9 +1,9 @@
 ---
-- name: Remember MinIO client package path
+- name: Запомнить путь к пакету MinIO Client
   ansible.builtin.set_fact:
     _minio_client_deb_path: "{{ minio_installer_dir }}/minio-client.deb"
 
-- name: Create MinIO installer directory
+- name: Создать каталог для установочных файлов
   ansible.builtin.file:
     path: "{{ minio_installer_dir }}"
     state: directory
@@ -12,20 +12,20 @@
     mode: "0755"
   become: true
 
-- name: Download MinIO client package
+- name: Скачать пакет MinIO Client
   ansible.builtin.get_url:
     url: "{{ minio_client_deb_url }}"
     dest: "{{ _minio_client_deb_path }}"
     mode: "0644"
   become: true
 
-- name: Install MinIO client package
+- name: Установить пакет MinIO Client
   ansible.builtin.apt:
     deb: "{{ _minio_client_deb_path }}"
     state: present
   become: true
 
-- name: Check possible mcli locations
+- name: Проверить расположение бинарника mcli
   ansible.builtin.stat:
     path: "{{ item }}"
   loop:
@@ -33,24 +33,26 @@
     - /usr/bin/mcli
   register: _mcli_stats
 
-- name: Select installed mcli path
+- name: Определить установленный путь mcli
   ansible.builtin.set_fact:
     _mcli_path: >-
       {{
-        (_mcli_stats.results
-        | selectattr('stat.exists', 'defined')
-        | selectattr('stat.exists')
-        | map(attribute='stat.path')
-        | list
-        | first) | default('')
+        (
+          _mcli_stats.results
+          | selectattr('stat.exists', 'defined')
+          | selectattr('stat.exists')
+          | map(attribute='stat.path')
+          | list
+          | first
+        ) | default('')
       }}
 
-- name: Abort when mcli is unavailable
+- name: Прервать выполнение при отсутствии mcli
   ansible.builtin.fail:
     msg: "mcli (mc) not found after installation"
   when: _mcli_path == ''
 
-- name: Create compatibility symlink for mc
+- name: Создать симлинк совместимости для mc
   ansible.builtin.file:
     src: "{{ _mcli_path }}"
     dest: /usr/local/bin/mc
@@ -58,7 +60,7 @@
     mode: "0755"
   become: true
 
-- name: Create root mc configuration directory
+- name: Создать каталог конфигурации mc для root
   ansible.builtin.file:
     path: /root/.mc
     state: directory
@@ -67,16 +69,16 @@
     mode: "0700"
   become: true
 
-- name: Build mc command template
+- name: Сформировать шаблон команды mc
   ansible.builtin.set_fact:
     mc_command: "/usr/local/bin/mc{{ '' if minio_validate_certificate else ' --insecure' }} --config-dir /root/.mc"
 
-- name: Set default MinIO URL when missing
+- name: Установить значение URL MinIO по умолчанию
   ansible.builtin.set_fact:
     minio_url: "http://{{ ansible_default_ipv4.address | default(ansible_host) }}:{{ minio_server_port }}"
   when: (minio_url | default('')) == ''
 
-- name: Wait for MinIO service availability
+- name: Дождаться доступности службы MinIO
   ansible.builtin.wait_for:
     host: "{{ ansible_default_ipv4.address | default(ansible_host) }}"
     port: "{{ minio_server_port | int }}"
@@ -86,7 +88,7 @@
   failed_when: false
   become: true
 
-- name: Check existing MinIO alias
+- name: Проверить существующий алиас MinIO
   ansible.builtin.command: >
     {{ mc_command }} alias ls {{ minio_alias }}
   register: _mc_alias_check
@@ -94,7 +96,7 @@
   changed_when: false
   become: true
 
-- name: Configure MinIO alias
+- name: Настроить алиас MinIO
   ansible.builtin.command: >
     {{ mc_command }} alias set {{ minio_alias }}
     {{ minio_url }} {{ minio_root_user }} {{ minio_root_password }}

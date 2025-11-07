@@ -1,4 +1,4 @@
-- name: Provision MinIO cluster
+- name: Развернуть кластер MinIO
   hosts: all
   become: true
   roles:

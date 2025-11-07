@@ -13,7 +13,7 @@
 - name: Сформировать адреса хранилищ
   run_once: true
   delegate_to: localhost
-  set_fact:
+  ansible.builtin.set_fact:
     _minio_server_cluster_nodes: >-
       {%- set out = [] -%}
       {%- for h in _minio_cluster_hosts -%}

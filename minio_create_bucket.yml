@@ -1,4 +1,4 @@
-- name: Run MinIO bucket creation
+- name: Создать бакеты MinIO
   hosts: nodes
   gather_facts: false
   tasks:

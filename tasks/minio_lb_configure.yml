@@ -6,10 +6,9 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Restart nginx
+  notify: Перезапустить службу nginx
 
 - name: Удалить стандартный сайт nginx при наличии
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-  ignore_errors: true

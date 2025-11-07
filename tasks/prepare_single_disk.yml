@@ -31,9 +31,11 @@
 
 - name: Очистить файловую систему при необходимости
   ansible.builtin.command: "wipefs -af {{ item.key }}"
+  register: _psd_wipe
   when:
     - not _psd_already_ok
     - minio_preconf_wipe_disks | default(false)
+  changed_when: _psd_wipe.rc == 0
 
 - name: Создать файловую систему XFS на устройстве
   community.general.filesystem:
