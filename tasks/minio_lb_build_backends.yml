@@ -1,0 +1,33 @@
+---
+- name: Использовать явный список бэкендов
+  ansible.builtin.set_fact:
+    _minio_lb_backends: "{{ minio_lb_backends | list }}"
+  when: minio_lb_backends | length > 0
+
+- name: Инициализировать список бэкендов
+  ansible.builtin.set_fact:
+    _minio_lb_backends: []
+  when: minio_lb_backends | length == 0
+
+- name: Собрать бэкенды из группы узлов
+  ansible.builtin.set_fact:
+    _minio_lb_backends: "{{ _minio_lb_backends + [_this_ip] }}"
+  loop: "{{ groups[minio_cluster_nodes_group] | default([]) }}"
+  loop_control:
+    loop_var: _host_item
+  vars:
+    _this_ip: >-
+      {{ hostvars[_host_item].ansible_host
+         | default(hostvars[_host_item].ansible_default_ipv4.address)
+         | default(_host_item) }}
+  when: minio_lb_backends | length == 0
+
+- name: Убрать дубликаты и отсортировать бэкенды
+  ansible.builtin.set_fact:
+    _minio_lb_backends: "{{ _minio_lb_backends | unique | sort }}"
+
+- name: Проверить что список бэкендов не пуст
+  ansible.builtin.assert:
+    that:
+      - _minio_lb_backends | length > 0
+    fail_msg: "MinIO LB: список бэкендов пуст. Задайте minio_lb_backends или группу node."

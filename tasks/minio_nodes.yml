@@ -1,0 +1,37 @@
+---
+- name: Собрать каталоги данных из дополнительных дисков
+  ansible.builtin.set_fact:
+    minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
+  when: (minio_extra_disks | default([])) | length > 0
+  changed_when: false
+
+- name: Создать системную группу MinIO
+  ansible.builtin.group:
+    name: "{{ minio_group }}"
+    state: present
+
+- name: Создать системного пользователя MinIO
+  ansible.builtin.user:
+    name: "{{ minio_user }}"
+    group: "{{ minio_group }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Подготовить диски данных
+  ansible.builtin.include_tasks: prepare_disks.yml
+
+- name: Установить пакет MinIO Server
+  ansible.builtin.include_tasks: install_server.yml
+  when: minio_install_server | bool
+
+- name: Настроить службу MinIO Server
+  ansible.builtin.include_tasks: configure_server.yml
+  when: minio_install_server | bool
+
+- name: Установить и настроить MinIO Client
+  ansible.builtin.include_tasks: install_client.yml
+  when: minio_install_client | bool
+
+- name: Опубликовать итоговые данные по установке
+  ansible.builtin.include_tasks: stats.yml
