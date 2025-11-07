@@ -1,4 +1,4 @@
-- name: Deploy standalone MinIO
+- name: Deploy MinIO
   hosts: all
   become: true
   roles:

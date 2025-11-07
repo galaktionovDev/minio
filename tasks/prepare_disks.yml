@@ -1,62 +1,83 @@
 ---
-- name: "Preconf | Определить все доступные блочные устройства (disk, без монтирования)"
-  command: "lsblk -dn -o NAME,TYPE,MOUNTPOINT"
-  register: _lsblk_raw
+- name: Preconf | Определить все доступные блочные устройства (disk, без монтирования)
+  ansible.builtin.command: lsblk -dn -o NAME,TYPE,MOUNTPOINT
+  register: _minio_lsblk
   changed_when: false
 
-- name: "Preconf | Получить список несистемных дисков"
-  set_fact:
-    _available_disks: >-
+- name: Preconf | Получить список всех дисков
+  vars:
+    _rows: "{{ _minio_lsblk.stdout_lines | default([]) }}"
+  ansible.builtin.set_fact:
+    _minio_all_disks: >-
       {{
-        _lsblk_raw.stdout_lines
+        _rows
         | map('split')
+        | map('list')
         | selectattr('1', 'equalto', 'disk')
-        | rejectattr('2', 'defined')
         | map('first')
         | map('regex_replace', '^', '/dev/')
         | list
       }}
+  changed_when: false
 
-- name: "Preconf | Исключить системный диск (vda, sda, nvme0n1)"
-  set_fact:
+- name: Preconf | Исключить системный диск (vda, sda, nvme0n1)
+  ansible.builtin.set_fact:
     minio_preconf_data_devices: >-
       {{
-        _available_disks
-        | reject('search', 'vda')
-        | reject('search', 'sda')
-        | reject('search', 'nvme0n1')
+        _minio_all_disks
+        | reject('match', '^/dev/vda$')
+        | reject('match', '^/dev/sda$')
+        | reject('match', '^/dev/nvme0n1$')
         | list
       }}
-  when: minio_preconf_data_devices is not defined
+  changed_when: false
 
-- name: "Preconf | Проверка входных данных"
+- name: Preconf | Определить уже смонтированные каталоги MinIO
+  ansible.builtin.set_fact:
+    _minio_current_mounts: "{{ ansible_mounts | map(attribute='mount') | list }}"
+    _minio_required_datadirs: "{{ minio_server_datadirs | default([]) }}"
+  changed_when: false
+
+- name: Preconf | Определить каталоги, которые ещё нужно подготовить
+  ansible.builtin.set_fact:
+    _minio_datadirs_to_prepare: "{{ _minio_required_datadirs | difference(_minio_current_mounts) }}"
+  changed_when: false
+
+- name: Preconf | Пропустить подготовку дисков, если всё уже смонтировано
+  ansible.builtin.set_fact:
+    _minio_skip_disk_prepare: true
+  when: _minio_datadirs_to_prepare | length == 0
+  changed_when: false
+
+- name: Preconf | Проверка входных данных
   ansible.builtin.assert:
     that:
-      - minio_server_datadirs is defined
-      - minio_server_datadirs | length > 0
-      - minio_preconf_data_devices is defined
-      - minio_preconf_data_devices | length >= (minio_server_datadirs | length)
-    fail_msg: "Нужно передать minio_preconf_data_devices и minio_server_datadirs (длины должны совпадать)."
+      - minio_preconf_data_devices | length >= _minio_datadirs_to_prepare | length
+    fail_msg: "Нужно устройств не меньше, чем несмонтированных каталогов: {{ _minio_datadirs_to_prepare }}"
+  when: not (_minio_skip_disk_prepare | default(false))
 
-- name: "Preconf | Сопоставить устройства и точки монтирования"
-  set_fact:
-    _disk_map: "{{ dict(minio_preconf_data_devices[0:(minio_server_datadirs|length)] | zip(minio_server_datadirs)) }}"
+- name: Preconf | Построить пары диск/каталог
+  ansible.builtin.set_fact:
+    _minio_device_mount_pairs: >-
+      {%- set pairs = [] -%}
+      {%- for idx in range(0, _minio_datadirs_to_prepare | length) -%}
+        {%- set _ = pairs.append({'key': minio_preconf_data_devices[idx], 'value': _minio_datadirs_to_prepare[idx]}) -%}
+      {%- endfor -%}
+      {{ pairs }}
+  when: not (_minio_skip_disk_prepare | default(false))
+  changed_when: false
 
-- name: "Preconf | Установить необходимые пакеты"
-  package:
-    name:
-      - gdisk
-      - xfsprogs
-    state: present
+- name: Preconf | Подготовить несмонтированные диски
+  ansible.builtin.include_tasks: prepare_single_disk.yml
+  loop: "{{ _minio_device_mount_pairs }}"
+  when: not (_minio_skip_disk_prepare | default(false))
 
-- name: "Preconf | Создать пользователя minio (если нет)"
-  user:
-    name: "{{ minio_user | default('minio') }}"
-    system: true
-    shell: /usr/sbin/nologin
-
-- name: "Preconf | Подготовить каждый диск"
-  include_tasks: prepare_single_disk.yml
-  loop: "{{ _disk_map | dict2items }}"
-  loop_control:
-    loop_var: item
+- name: Preconf | Ensure MinIO owns all data dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ minio_user }}"
+    group: "{{ minio_group }}"
+    mode: "0750"
+  loop: "{{ minio_server_datadirs | default([]) }}"
+  when: (minio_server_datadirs | default([])) | length > 0

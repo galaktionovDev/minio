@@ -1,5 +1,5 @@
 - name: Delete MinIO bucket (action-only)
-  hosts: all
+  hosts: nodes
   gather_facts: false
   tasks:
     - import_role:

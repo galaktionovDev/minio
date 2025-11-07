@@ -1,0 +1,33 @@
+---
+- name: LB | define deb list
+  ansible.builtin.set_fact:
+    _minio_lb_debs:
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx-common_1.18.0-6ubuntu14.7_all.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-image-filter_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-perl_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-xslt-filter_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-mail_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-stream_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-stream-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx-core_1.18.0-6ubuntu14.7_amd64.deb"
+      - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx_1.18.0-6ubuntu14.7_amd64.deb"
+
+- name: LB | download debs
+  ansible.builtin.get_url:
+    url: "{{ item }}"
+    dest: "/tmp/{{ item | basename }}"
+    mode: "0644"
+  loop: "{{ _minio_lb_debs }}"
+
+- name: LB | install debs
+  ansible.builtin.apt:
+    deb: "/tmp/{{ item | basename }}"
+    state: present
+  loop: "{{ _minio_lb_debs }}"
+
+- name: LB | enable and start nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

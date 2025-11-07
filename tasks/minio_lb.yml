@@ -1,0 +1,12 @@
+---
+- name: LB | install nginx
+  ansible.builtin.include_tasks: minio_lb_install.yml
+
+- name: LB | build backends
+  ansible.builtin.include_tasks: minio_lb_build_backends.yml
+
+- name: LB | render config
+  ansible.builtin.include_tasks: minio_lb_configure.yml
+
+- name: LB | flush handlers (nginx reload before ending host)
+  ansible.builtin.meta: flush_handlers

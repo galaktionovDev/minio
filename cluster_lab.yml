@@ -1,5 +1,0 @@
-- name: MinIO HA cluster lab
-  hosts: minio_cluster
-  become: yes
-  roles:
-    - role: .

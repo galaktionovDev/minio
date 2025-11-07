@@ -1,53 +1,61 @@
 ---
-- name: Validate required variables
+- name: Validate input
   ansible.builtin.assert:
     that:
-      - connection_url is defined and (connection_url | length) > 0
-      - access_key is defined and (access_key | length) > 0
-      - access_secret is defined and (access_secret | length) > 0
-      - bucket_name is defined and (bucket_name | length) > 0
-    fail_msg: "connection_url, access_key, access_secret, bucket_name must be provided"
+      - bucket_name is defined
+      - (bucket_name | string) | length > 0
+    fail_msg: "bucket_name is required"
 
-- name: Pick mc/mcli candidates
+- name: Pick a node host
+  run_once: true
   ansible.builtin.set_fact:
-    _mc_candidates:
-      - /usr/local/bin/mc
-      - /usr/bin/mc
-      - /usr/local/bin/mcli
-      - /usr/bin/mcli
+    _mc_host: "{{ groups['nodes'] | first }}"
+    _mc_alias: "{{ minio_alias | default('myminio') }}"
 
-- name: Detect client binary
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop: "{{ _mc_candidates }}"
-  register: _mc_stats
+- name: Detect mc binary
+  run_once: true
+  become: true
+  delegate_to: "{{ _mc_host }}"
+  ansible.builtin.shell: |
+    for b in /usr/local/bin/mc /usr/bin/mc /usr/local/bin/mcli /usr/bin/mcli; do
+      [ -x "$b" ] && { echo "$b"; exit 0; }
+    done
+    exit 1
+  register: _mc_bin
+  changed_when: false
 
-- name: Select client binary
-  ansible.builtin.set_fact:
-    _mc_bin: "{{ (_mc_stats.results | selectattr('stat.exists','eq', true) | map(attribute='stat.path') | list | first) | default('') }}"
+- name: Check bucket existence
+  run_once: true
+  become: true
+  delegate_to: "{{ _mc_host }}"
+  ansible.builtin.shell: |
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" stat "{{ _mc_alias }}/{{ bucket_name }}"
+  register: _stat
+  changed_when: false
+  failed_when: false
 
-- name: Fail if client missing
-  ansible.builtin.fail:
-    msg: "MinIO client (mc/mcli) not found in {{ _mc_candidates | join(', ') }}"
-  when: _mc_bin == ''
-
-- name: Configure MinIO alias
-  ansible.builtin.command: >
-    {{ _mc_bin }} alias set {{ minio_alias | default('myminio') }}
-    {{ connection_url }} {{ access_key }} {{ access_secret }}
-  register: _alias
-
-  no_log: true
-  changed_when: "'Added' in _alias.stdout or 'Updated' in _alias.stdout"
-
-- name: Create bucket (idempotent)
-  ansible.builtin.command: >
-    {{ _mc_bin }} mb --ignore-existing {{ minio_alias | default('myminio') }}/{{ bucket_name }}
+- name: Create bucket if missing
+  run_once: true
+  when: _stat.rc != 0
+  become: true
+  delegate_to: "{{ _mc_host }}"
+  ansible.builtin.shell: |
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
   register: _mb
-  changed_when: "'created' in (_mb.stdout | lower)"
+  changed_when: true
+
+- name: Build bucket_url (always)
+  run_once: true
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _bucket_url: "{{ connection_url | regex_replace('/+$','') ~ '/' ~ bucket_name }}"
 
 - name: Export result
+  run_once: true
+  delegate_to: localhost
   ansible.builtin.set_stats:
     data:
       bucket_name: "{{ bucket_name }}"
-      bucket_url:  "{{ connection_url }}/{{ bucket_name }}"
+      bucket_url: "{{ _bucket_url }}"
+      bucket_alias: "{{ _mc_alias }}"
+      bucket_created: "{{ _stat.rc != 0 }}"

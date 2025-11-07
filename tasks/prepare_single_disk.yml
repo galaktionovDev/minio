@@ -1,38 +1,65 @@
-# tasks/prepare_single_disk.yml
-# item.key  -> устройство (/dev/vdb)
-# item.value-> точка монтирования (/app/d1)
+---
+- name: "Disk | Собрать текущее состояние"
+  ansible.builtin.set_fact:
+    _psd_mounts_by_dev: "{{ ansible_mounts | selectattr('device', 'equalto', item.key) | list }}"
+    _psd_mounts_by_path: "{{ ansible_mounts | selectattr('mount', 'equalto', item.value) | list }}"
+    _psd_already_ok: >-
+      {{
+        (ansible_mounts | selectattr('device', 'equalto', item.key) | list | length > 0)
+        and
+        (ansible_mounts | selectattr('mount', 'equalto', item.value) | list | length > 0)
+      }}
+  changed_when: false
 
-- name: Disk | Ensure mountpoint dir
+- name: "FS | Создать каталог монтирования (если не было)"
   ansible.builtin.file:
     path: "{{ item.value }}"
     state: directory
-    owner: "{{ minio_user }}"
-    group: "{{ minio_group }}"
+    owner: "{{ minio_user | default('minio') }}"
+    group: "{{ minio_group | default('minio') }}"
     mode: "0750"
+  when: not _psd_already_ok
 
-- name: FS | Detect current fstype
-  ansible.builtin.command: blkid -s TYPE -o value {{ item.key }}
-  register: _fstype
-  changed_when: false
-  failed_when: false
+- name: "Disk | Размонтировать, если смонтировано не в {{ item.value }}"
+  ansible.posix.mount:
+    path: "{{ (_psd_mounts_by_dev[0].mount | default('')) }}"
+    state: unmounted
+  when:
+    - not _psd_already_ok
+    - _psd_mounts_by_dev | length > 0
+    - (_psd_mounts_by_dev[0].mount | default('')) != item.value
 
-- name: FS | Create XFS if needed (reflink=0)
+- name: "Disk | WipeFS (опц.)"
+  ansible.builtin.command: "wipefs -af {{ item.key }}"
+  when:
+    - not _psd_already_ok
+    - minio_preconf_wipe_disks | default(false)
+
+- name: "FS | Создать XFS (reflink=0) на устройстве"
   community.general.filesystem:
     fstype: xfs
     dev: "{{ item.key }}"
+    force: "{{ (minio_preconf_wipe_disks | default(false)) | bool }}"
     opts: "-m reflink=0"
-    force: false
-  when: _fstype.stdout != 'xfs'
+  when: not _psd_already_ok
 
-- name: FS | Get UUID
-  ansible.builtin.command: blkid -s UUID -o value {{ item.key }}
-  register: _uuid
+- name: "FS | Убедиться что каталог есть и с нужными правами"
+  ansible.builtin.file:
+    path: "{{ item.value }}"
+    state: directory
+    owner: "{{ minio_user | default('minio') }}"
+    group: "{{ minio_group | default('minio') }}"
+    mode: "0750"
+
+- name: "FS | Получить UUID"
+  ansible.builtin.command: "blkid -o value -s UUID {{ item.key }}"
+  register: _psd_blk
   changed_when: false
 
-- name: Mount | Mount and persist in fstab
+- name: "Mount | Прописать в fstab и смонтировать"
   ansible.posix.mount:
     path: "{{ item.value }}"
-    src: "{{ 'UUID=' + _uuid.stdout if _uuid.stdout | length > 0 else item.key }}"
+    src: "UUID={{ _psd_blk.stdout | trim }}"
     fstype: xfs
-    opts: "noatime,nodiratime"
+    opts: "defaults,noatime,nodiratime"
     state: mounted

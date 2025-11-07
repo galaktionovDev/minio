@@ -1,93 +1,18 @@
 ---
-- name: Derive datadirs from minio_extra_disks (if not provided)
+- name: Detect host role
   ansible.builtin.set_fact:
-    minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
-  when: (minio_extra_disks | default([])) | length > 0
+    minio_is_lb: "{{ (minio_lb_group in group_names) | bool }}"
 
-- name: "Preconf | Prepare data disks"
-  ansible.builtin.include_tasks: prepare_disks.yml
+- name: Run LB scenario
+  ansible.builtin.include_tasks: minio_lb.yml
   when:
-    - minio_server_datadirs is defined
-    - (minio_server_datadirs | length) > 0
+    - minio_enable_lb | default(true) | bool
+    - minio_is_lb | bool
 
-- name: Normalise deployment mode inputs
-  ansible.builtin.set_fact:
-    minio_cluster_mode_effective: >-
-      {{
-        (_mode_from_var if _mode_from_var | length > 0
-         else (_mode_from_config if _mode_from_config | length > 0
-               else 'Single Instance'))
-      }}
-    minio_cluster_mode_effective_normalised: "{{ minio_cluster_mode_effective | string | lower | trim }}"
-    minio_cluster_nodes_effective: >-
-      {{
-        (
-          (minio_cluster_nodes | default([], true))
-          if (minio_cluster_nodes | default([], true)) | length > 0
-          else (
-            minio_config.minio_cluster_nodes
-            | default(minio_server_cluster_nodes | default([]))
-          )
-        ) | list
-      }}
-  vars:
-    _mode_from_var: "{{ minio_cluster_mode | default('', true) | string | trim }}"
-    _mode_from_config: "{{ minio_config.minio_cluster_mode | default('', true) | string | trim }}"
+- name: Stop role on LB host
+  ansible.builtin.meta: end_host
+  when:
+    - minio_is_lb | bool
 
-- name: Decide if High Availability is enabled
-  ansible.builtin.set_fact:
-    minio_ha_enabled: "{{ (minio_cluster_mode_effective_normalised in _ha_aliases) | bool }}"
-  vars:
-    _ha_aliases:
-      - high availability
-      - high-availability
-      - ha
-      - distributed
-      - cluster
-
-# Построение MINIO_VOLUMES для HA
-- name: Build HA MINIO_VOLUMES
-  ansible.builtin.include_tasks: build_cluster_volumes.yml
-  when: minio_ha_enabled | bool
-
-# Install Minio Server
-- name: Install server
-  ansible.builtin.include_tasks: install_server.yml
-  when: minio_install_server
-
-# Install Minio Client
-- name: Install client
-  ansible.builtin.include_tasks: install_client.yml
-  when: minio_install_client
-
-# Configure server
-- name: Configure server
-  ansible.builtin.include_tasks: configure_server.yml
-  when: minio_url | length > 0 and minio_install_client
-  run_once: true
-
-# === Compute client host for links (первый узел) ===
-- name: Pick first cluster host
-  ansible.builtin.set_fact:
-    _cluster_candidates: >-
-      {{
-        (minio_cluster_nodes_effective | default([]))
-        if (minio_cluster_nodes_effective | default([])) | length > 0
-        else (groups[minio_cluster_group] | default(ansible_play_hosts_all))
-      }}
-    _first_host: "{{ _cluster_candidates | first }}"
-
-- name: Compute client host
-  ansible.builtin.set_fact:
-    minio_client_host: >-
-      {{ (hostvars[_first_host] | default({})).ansible_host
-         | default((hostvars[_first_host] | default({})).ansible_default_ipv4.address
-         | default(_first_host)) }}
-
-- name: Export connection data
-  ansible.builtin.set_stats:
-    data:
-      connection_url: "http://{{ minio_client_host }}:{{ minio_config.minio_server_port | default(minio_server_port | default(9000)) }}"
-      console_url:    "http://{{ minio_client_host }}:{{ minio_config.minio_console_port | default(minio_console_port | default(9001)) }}"
-      access_key:     "{{ minio_root_user | default(minio_config.minio_root_user) }}"
-  run_once: true
+- name: Run nodes scenario
+  ansible.builtin.include_tasks: minio_nodes.yml
