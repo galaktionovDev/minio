@@ -1,0 +1,34 @@
+---
+- name: Собрать параметры для построения списка узлов
+  run_once: true
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _minio_cluster_hosts: "{{ groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all) }}"
+    _minio_first_host: "{{ (groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all)) | first }}"
+    _minio_disks_from_first: "{{ (hostvars[_minio_first_host].minio_extra_disks | default([])) | map(attribute='mount') | list }}"
+    _minio_used_mounts: "{{ (_minio_disks_from_first | length > 0) | ternary(_minio_disks_from_first, ['/app/d1']) }}"
+    _minio_scheme: "{{ hostvars[_minio_first_host].minio_scheme | default('http') }}"
+    _minio_port: "{{ hostvars[_minio_first_host].minio_server_port | default('9000') }}"
+
+- name: Сформировать адреса хранилищ
+  run_once: true
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _minio_server_cluster_nodes: >-
+      {%- set out = [] -%}
+      {%- for h in _minio_cluster_hosts -%}
+        {%- set addr = hostvars[h].ansible_host
+                       | default(hostvars[h].ansible_default_ipv4.address)
+                       | default(h) -%}
+        {%- for m in _minio_used_mounts -%}
+          {%- set _ = out.append(_minio_scheme ~ '://' ~ addr ~ ':' ~ _minio_port ~ m) -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Опубликовать список конечных точек
+  run_once: true
+  delegate_to: localhost
+  ansible.builtin.set_stats:
+    data:
+      minio_server_cluster_nodes: "{{ _minio_server_cluster_nodes }}"

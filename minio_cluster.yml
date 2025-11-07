@@ -1,4 +1,4 @@
-- name: Deploy standalone MinIO
+- name: Развернуть кластер MinIO
   hosts: all
   become: true
   roles:

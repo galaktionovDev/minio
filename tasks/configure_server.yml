@@ -1,24 +1,39 @@
 ---
-- name: Compute client host
-  set_fact:
-    minio_client_host: "{{ machine.default_v4_address | default(ansible_host, true) | default(inventory_hostname, true) }}"
+- name: Создать каталог конфигурации MinIO
+  ansible.builtin.file:
+    path: "{{ minio_etc_dir }}"
+    state: directory
+    owner: "{{ minio_user }}"
+    group: "{{ minio_group }}"
+    mode: "0750"
 
-- name: Compute MinIO URLs
-  set_fact:
-    minio_url: "{{ minio_url | default('http://' + minio_client_host + ':' + (minio_server_port | default(9000, true) | string)) }}"
+- name: Проверить корректность режима кластера
+  ansible.builtin.assert:
+    that:
+      - minio_cluster_mode in ['Single Instance', 'High Availability']
+      - (minio_cluster_mode == 'Single Instance') or ((minio_cluster_mode == 'High Availability') and (groups['minio_cluster'] | length) >= 1)
+    fail_msg: "Некорректные параметры кластера MinIO"
 
-- name: Set insecure mc command
-  set_fact:
-    mc_command: "{{ minio_client_bin }} --insecure"
-  when: not minio_validate_certificate
+- name: Сгенерировать файл окружения MinIO
+  ansible.builtin.template:
+    src: minio.env.j2
+    dest: "{{ minio_server_envfile }}"
+    owner: "{{ minio_user }}"
+    group: "{{ minio_group }}"
+    mode: "0640"
+  notify: Перезапустить службу MinIO
 
-- name: Set secure mc command
-  set_fact:
-    mc_command: "{{ minio_client_bin }}"
-  when: minio_validate_certificate
+- name: Разместить unit systemd для MinIO
+  ansible.builtin.template:
+    src: minio.service.j2
+    dest: /etc/systemd/system/minio.service
+    owner: root
+    group: root
+    mode: "0644"
 
-- name: Configure minio connection alias
-  command: "{{ mc_command }} alias set {{ minio_alias }} {{ minio_url }} {{ minio_root_user }} {{ minio_root_password }}"
-  register: alias_command
-  changed_when: false
-  failed_when: "'Added' not in alias_command.stdout and 'Updated' not in alias_command.stdout"
+- name: Включить и запустить службу MinIO
+  ansible.builtin.systemd:
+    name: minio
+    state: started
+    enabled: true
+    daemon_reload: true

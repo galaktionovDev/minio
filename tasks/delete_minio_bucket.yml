@@ -1,67 +1,52 @@
 ---
-- name: Validate required variables
+- name: Проверить параметры бакета
   ansible.builtin.assert:
     that:
-      - connection_url is defined and (connection_url | length) > 0
-      - access_key is defined and (access_key | length) > 0
-      - access_secret is defined and (access_secret | length) > 0
-      - bucket_name is defined and (bucket_name | length) > 0
-    fail_msg: "connection_url, access_key, access_secret, bucket_name must be provided"
+      - bucket_name is defined
+      - (bucket_name | string) | length > 0
+    fail_msg: "bucket_name is required"
 
-- name: Pick mc/mcli candidates
+- name: Выбрать узел для работы с бакетами
+  run_once: true
   ansible.builtin.set_fact:
-    _mc_candidates:
-      - /usr/local/bin/mc
-      - /usr/bin/mc
-      - /usr/local/bin/mcli
-      - /usr/bin/mcli
+    _mc_host: "{{ groups['nodes'] | first }}"
+    _mc_alias: "{{ minio_alias | default('myminio') }}"
 
-- name: Detect client binary
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop: "{{ _mc_candidates }}"
-  register: _mc_stats
-
-- name: Select client binary
-  ansible.builtin.set_fact:
-    _mc_bin: "{{ (_mc_stats.results | selectattr('stat.exists','eq', true) | map(attribute='stat.path') | list | first) | default('') }}"
-
-- name: Fail if client missing
-  ansible.builtin.fail:
-    msg: "MinIO client (mc/mcli) not found in {{ _mc_candidates | join(', ') }}"
-  when: _mc_bin == ''
-
-- name: Configure MinIO alias
-  ansible.builtin.command: >
-    {{ _mc_bin }} alias set {{ minio_alias | default('myminio') }}
-    {{ connection_url }} {{ access_key }} {{ access_secret }}
-  no_log: true
+- name: Найти исполняемый файл mc на целевом хосте
+  run_once: true
+  become: true
+  delegate_to: "{{ _mc_host }}"
+  ansible.builtin.shell: |
+    for b in /usr/local/bin/mc /usr/bin/mc /usr/local/bin/mcli /usr/bin/mcli; do
+      [ -x "$b" ] && { echo "$b"; exit 0; }
+    done
+    exit 1
+  register: _mc_bin
   changed_when: false
 
-- name: Check bucket existence
-  command: "{{ _mc_bin }} --insecure stat {{ minio_alias }}/{{ bucket_name }}"
-  register: mc_stat
+- name: Проверить, существует ли бакет
+  run_once: true
+  become: true
+  delegate_to: "{{ _mc_host }}"
+  ansible.builtin.shell: |
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" stat "{{ _mc_alias }}/{{ bucket_name }}"
+  register: _stat
+  changed_when: false
   failed_when: false
-  changed_when: false
 
-- name: Set exist flag
-  set_fact:
-    _bucket_exists: "{{ mc_stat.rc == 0 }}"
+- name: Удалить бакет при наличии
+  run_once: true
+  when: _stat.rc == 0
+  become: true
+  delegate_to: "{{ _mc_host }}"
+  ansible.builtin.shell: |
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" rb --force "{{ _mc_alias }}/{{ bucket_name }}"
+  register: _rm
+  changed_when: _rm.rc == 0
 
-- name: Empty bucket (objects + versions)
-  command: >
-    {{ _mc_bin }} --insecure rm -r --force --versions
-    {{ minio_alias }}/{{ bucket_name }}
-  when: _bucket_exists
-  changed_when: true
-
-- name: Remove bucket
-  command: "{{ _mc_bin }} --insecure rb --force {{ minio_alias }}/{{ bucket_name }}"
-  when: _bucket_exists
-  changed_when: true
-
-- name: Export result
+- name: Опубликовать результат удаления бакета
+  run_once: true
+  delegate_to: localhost
   ansible.builtin.set_stats:
     data:
       bucket_name: "{{ bucket_name }}"
-      removed: "{{ _bucket_exists | default(false) }}"

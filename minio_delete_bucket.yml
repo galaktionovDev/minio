@@ -1,7 +1,8 @@
-- name: Delete MinIO bucket (action-only)
-  hosts: all
+- name: Удалить бакеты MinIO
+  hosts: nodes
   gather_facts: false
   tasks:
-    - import_role:
+    - name: Импорт задач удаления бакетов MinIO
+      ansible.builtin.import_role:
         name: .
         tasks_from: delete_minio_bucket.yml
