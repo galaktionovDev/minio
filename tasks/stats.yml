@@ -1,27 +1,72 @@
-- name: UI | derive base facts
+- name: Собрать список узлов кластера
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_fact:
     _hosts: "{{ groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all) }}"
     _first_host: "{{ (groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all)) | first }}"
-    _first_addr: "{{ hostvars[(groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all) | first)].ansible_host | default(hostvars[(groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all) | first)].ansible_default_ipv4.address) | default((groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all)) | first) }}"
-    _scheme: "{{ minio_scheme | default('http') }}"
-    _api_port: "{{ minio_server_port | default('9000') }}"
-    _console_port: "{{ minio_console_port | default('9001') }}"
-    _first_mounts: "{{ (hostvars[(groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all) | first)].minio_extra_disks | default([])) | map(attribute='mount') | list }}"
 
-- name: UI | derive computed facts
+- name: Определить параметры первого узла
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_fact:
-    cluster_mode: "{{ 'ha' if ((minio_cluster_mode_effective | default(minio_cluster_mode | default(''))) in ['ha','distributed','cluster','erasure','erasure-coded','high-availability'] or ((_hosts | length) | int > 1)) else 'single' }}"
+    _first_addr: >-
+      {{
+        hostvars[_first_host].ansible_host
+        | default(hostvars[_first_host].ansible_default_ipv4.address)
+        | default(_first_host)
+      }}
+    _scheme: "{{ minio_scheme | default('http') }}"
+    _api_port: "{{ minio_server_port | default('9000') }}"
+    _console_port: "{{ minio_console_port | default('9001') }}"
+    _first_mounts: >-
+      {{
+        hostvars[_first_host].minio_extra_disks
+        | default([])
+        | map(attribute='mount')
+        | list
+      }}
+
+- name: Вычислить итоговые параметры кластера
+  run_once: true
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    cluster_mode: >-
+      {{
+        'ha'
+        if (
+          (minio_cluster_mode_effective | default(minio_cluster_mode | default(''))) in [
+            'ha', 'distributed', 'cluster', 'erasure', 'erasure-coded', 'high-availability'
+          ]
+          or ((_hosts | length) | int > 1)
+        )
+        else 'single'
+      }}
     minio_node_count: "{{ (_hosts | length) | int }}"
     minio_drives_per_node: "{{ (_first_mounts | length) if (_first_mounts | length) else 1 }}"
     inventory_first_host: "{{ _first_host }}"
-    connection_url: "{{ (_scheme ~ '://' ~ minio_lb_api_domain) if ((minio_enable_lb | default(false)) and (minio_lb_api_domain | default('') | length > 0)) else (_scheme ~ '://' ~ _first_addr ~ ':' ~ _api_port) }}"
-    console_url: "{{ (_scheme ~ '://' ~ (minio_lb_console_domain | default(minio_lb_api_domain)) ~ ':' ~ _console_port) if ((minio_enable_lb | default(false)) and (((minio_lb_console_domain | default('')) | length > 0) or ((minio_lb_api_domain | default('')) | length > 0))) else (_scheme ~ '://' ~ _first_addr ~ ':' ~ _console_port) }}"
+    connection_url: >-
+      {{
+        (_scheme ~ '://' ~ minio_lb_api_domain)
+        if (
+          (minio_enable_lb | default(false))
+          and ((minio_lb_api_domain | default('')) | length > 0)
+        )
+        else (_scheme ~ '://' ~ _first_addr ~ ':' ~ _api_port)
+      }}
+    console_url: >-
+      {{
+        (_scheme ~ '://' ~ (minio_lb_console_domain | default(minio_lb_api_domain)) ~ ':' ~ _console_port)
+        if (
+          (minio_enable_lb | default(false))
+          and (
+            ((minio_lb_console_domain | default('')) | length > 0)
+            or ((minio_lb_api_domain | default('')) | length > 0)
+          )
+        )
+        else (_scheme ~ '://' ~ _first_addr ~ ':' ~ _console_port)
+      }}
 
-- name: UI | export app fields
+- name: Опубликовать данные для интерфейса
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_stats:

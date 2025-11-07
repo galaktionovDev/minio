@@ -1,18 +1,18 @@
 ---
-- name: Validate input
+- name: Проверить параметры бакета
   ansible.builtin.assert:
     that:
       - bucket_name is defined
       - (bucket_name | string) | length > 0
     fail_msg: "bucket_name is required"
 
-- name: Pick a node host
+- name: Выбрать узел для работы с бакетами
   run_once: true
   ansible.builtin.set_fact:
     _mc_host: "{{ groups['nodes'] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
 
-- name: Detect mc binary
+- name: Найти исполняемый файл mc на целевом хосте
   run_once: true
   become: true
   delegate_to: "{{ _mc_host }}"
@@ -24,7 +24,7 @@
   register: _mc_bin
   changed_when: false
 
-- name: Check bucket existence
+- name: Проверить, существует ли бакет
   run_once: true
   become: true
   delegate_to: "{{ _mc_host }}"
@@ -34,7 +34,7 @@
   changed_when: false
   failed_when: false
 
-- name: Delete bucket if exists
+- name: Удалить бакет при наличии
   run_once: true
   when: _stat.rc == 0
   become: true
@@ -44,7 +44,7 @@
   register: _rm
   changed_when: _rm.rc == 0
 
-- name: Export result
+- name: Опубликовать результат удаления бакета
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_stats:

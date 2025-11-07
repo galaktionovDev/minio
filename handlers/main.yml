@@ -1,15 +1,15 @@
 ---
-- name: Reload minio systemd
-  systemd:
+- name: Перечитать unit MinIO
+  ansible.builtin.systemd:
     name: minio
     daemon_reload: true
 
-- name: Restart minio
-  service:
+- name: Перезапустить службу MinIO
+  ansible.builtin.service:
     name: minio
     state: restarted
 
-- name: Restart nginx
+- name: Перезапустить службу nginx
   ansible.builtin.service:
     name: nginx
     state: restarted

@@ -14,7 +14,6 @@ minio_cluster_mode: "Single Instance"
 
 minio_scheme: "http"
 
-
 minio_etc_dir: /etc/minio
 minio_cert_dir: "{{ minio_etc_dir }}/ssl"
 minio_policy_dir: "{{ minio_etc_dir }}/policy"
@@ -41,16 +40,15 @@ minio_installer_dir: "/opt/minio/install"
 
 minio_server_deb_url: "{{ nexus_url }}/repository/products-raw/minio/minio_20250907161309.0.0_amd64.deb"
 minio_client_deb_url: "{{ nexus_url }}/repository/products-raw/minio/mcli_20250813083541.0.0_amd64.deb"
-minio_lb_group: "lb"              
-minio_cluster_nodes_group: "node"   
+minio_lb_group: "lb"
+minio_cluster_nodes_group: "node"
 
 minio_enable_lb: false
 minio_lb_api_listen: "0.0.0.0:9000"
 minio_lb_console_listen: "0.0.0.0:9001"
-minio_lb_backends: []           
+minio_lb_backends: []
 minio_lb_api_port: "9000"
 minio_lb_console_port: "9001"
 minio_lb_api_domain: ""
 minio_lb_console_domain: ""
 minio_lb_nginx_conf: /etc/nginx/conf.d/minio.conf
-

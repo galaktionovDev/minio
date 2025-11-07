@@ -1,5 +1,5 @@
 ---
-- name: LB | define deb list
+- name: Определить список пакетов nginx
   ansible.builtin.set_fact:
     _minio_lb_debs:
       - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx-common_1.18.0-6ubuntu14.7_all.deb"
@@ -13,20 +13,20 @@
       - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx-core_1.18.0-6ubuntu14.7_amd64.deb"
       - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx_1.18.0-6ubuntu14.7_amd64.deb"
 
-- name: LB | download debs
+- name: Загрузить пакеты nginx
   ansible.builtin.get_url:
     url: "{{ item }}"
     dest: "/tmp/{{ item | basename }}"
     mode: "0644"
   loop: "{{ _minio_lb_debs }}"
 
-- name: LB | install debs
+- name: Установить пакеты nginx
   ansible.builtin.apt:
     deb: "/tmp/{{ item | basename }}"
     state: present
   loop: "{{ _minio_lb_debs }}"
 
-- name: LB | enable and start nginx
+- name: Запустить и включить nginx
   ansible.builtin.service:
     name: nginx
     state: started

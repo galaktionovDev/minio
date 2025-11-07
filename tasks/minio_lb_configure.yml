@@ -1,15 +1,14 @@
 ---
-- name: LB | template nginx config
+- name: Сформировать конфигурацию nginx для MinIO
   ansible.builtin.template:
     src: minio_lb.nginx.j2
     dest: "{{ minio_lb_nginx_conf }}"
     owner: root
     group: root
     mode: "0644"
-  notify: Restart nginx
+  notify: Перезапустить службу nginx
 
-- name: LB | remove default site if exists
+- name: Удалить стандартный сайт nginx при наличии
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-  ignore_errors: true

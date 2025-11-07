@@ -1,4 +1,4 @@
-- name: Delete MinIO bucket (action-only)
+- name: Удалить бакеты MinIO
   hosts: nodes
   gather_facts: false
   tasks:

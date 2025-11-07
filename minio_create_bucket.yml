@@ -1,8 +1,7 @@
-- name: Create MinIO bucket (action-only)
+- name: Создать бакеты MinIO
   hosts: nodes
   gather_facts: false
   tasks:
     - import_role:
         name: .
         tasks_from: create_minio_buckets.yml
-        

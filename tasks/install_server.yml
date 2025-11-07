@@ -1,9 +1,9 @@
 ---
-- name: Define MinIO server package path
+- name: Запомнить путь к пакету MinIO Server
   ansible.builtin.set_fact:
     _minio_server_deb_path: "{{ minio_installer_dir }}/minio-server.deb"
 
-- name: Ensure MinIO installer directory exists
+- name: Создать каталог для установочных файлов
   ansible.builtin.file:
     path: "{{ minio_installer_dir }}"
     state: directory
@@ -11,7 +11,7 @@
     group: root
     mode: "0755"
 
-- name: Download the MinIO server package
+- name: Скачать пакет MinIO Server
   ansible.builtin.get_url:
     url: "{{ minio_server_deb_url }}"
     dest: "{{ _minio_server_deb_path }}"
@@ -21,13 +21,13 @@
   delay: 3
   until: _minio_server_download is succeeded
 
-- name: Install MinIO server package
+- name: Установить пакет MinIO Server
   ansible.builtin.apt:
     deb: "{{ _minio_server_deb_path }}"
     state: present
   register: _minio_server_installed
 
-- name: Create the Minio config directories
+- name: Создать каталоги конфигурации MinIO
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
