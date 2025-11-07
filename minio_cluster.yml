@@ -1,4 +1,4 @@
-- name: Deploy MinIO
+- name: Provision MinIO cluster
   hosts: all
   become: true
   roles:

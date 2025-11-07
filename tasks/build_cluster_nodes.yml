@@ -1,5 +1,5 @@
 ---
-- name: MinIO cluster | collect params
+- name: Собрать параметры для построения списка узлов
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_fact:
@@ -10,7 +10,7 @@
     _minio_scheme: "{{ hostvars[_minio_first_host].minio_scheme | default('http') }}"
     _minio_port: "{{ hostvars[_minio_first_host].minio_server_port | default('9000') }}"
 
-- name: MinIO cluster | build endpoints
+- name: Сформировать адреса хранилищ
   run_once: true
   delegate_to: localhost
   set_fact:
@@ -26,7 +26,7 @@
       {%- endfor -%}
       {{ out }}
 
-- name: MinIO cluster | export endpoints
+- name: Опубликовать список конечных точек
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_stats:

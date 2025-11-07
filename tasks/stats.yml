@@ -1,4 +1,4 @@
-- name: UI | derive base facts
+- name: Собрать исходные данные для вывода
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_fact:
@@ -10,7 +10,7 @@
     _console_port: "{{ minio_console_port | default('9001') }}"
     _first_mounts: "{{ (hostvars[(groups[minio_cluster_nodes_group] | default(ansible_play_hosts_all) | first)].minio_extra_disks | default([])) | map(attribute='mount') | list }}"
 
-- name: UI | derive computed facts
+- name: Вычислить итоговые параметры кластера
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_fact:
@@ -21,7 +21,7 @@
     connection_url: "{{ (_scheme ~ '://' ~ minio_lb_api_domain) if ((minio_enable_lb | default(false)) and (minio_lb_api_domain | default('') | length > 0)) else (_scheme ~ '://' ~ _first_addr ~ ':' ~ _api_port) }}"
     console_url: "{{ (_scheme ~ '://' ~ (minio_lb_console_domain | default(minio_lb_api_domain)) ~ ':' ~ _console_port) if ((minio_enable_lb | default(false)) and (((minio_lb_console_domain | default('')) | length > 0) or ((minio_lb_api_domain | default('')) | length > 0))) else (_scheme ~ '://' ~ _first_addr ~ ':' ~ _console_port) }}"
 
-- name: UI | export app fields
+- name: Опубликовать данные для интерфейса
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_stats:
