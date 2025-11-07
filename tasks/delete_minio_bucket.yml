@@ -1,18 +1,18 @@
 ---
-- name: Validate input
+- name: Validate bucket parameters
   ansible.builtin.assert:
     that:
       - bucket_name is defined
       - (bucket_name | string) | length > 0
     fail_msg: "bucket_name is required"
 
-- name: Pick a node host
+- name: Select MinIO node for bucket operations
   run_once: true
   ansible.builtin.set_fact:
     _mc_host: "{{ groups['nodes'] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
 
-- name: Detect mc binary
+- name: Find mc executable on target host
   run_once: true
   become: true
   delegate_to: "{{ _mc_host }}"
@@ -24,7 +24,7 @@
   register: _mc_bin
   changed_when: false
 
-- name: Check bucket existence
+- name: Check whether bucket already exists
   run_once: true
   become: true
   delegate_to: "{{ _mc_host }}"
@@ -34,7 +34,7 @@
   changed_when: false
   failed_when: false
 
-- name: Delete bucket if exists
+- name: Delete bucket when present
   run_once: true
   when: _stat.rc == 0
   become: true
@@ -44,7 +44,7 @@
   register: _rm
   changed_when: _rm.rc == 0
 
-- name: Export result
+- name: Publish bucket operation result
   run_once: true
   delegate_to: localhost
   ansible.builtin.set_stats:

@@ -1,9 +1,9 @@
 ---
-- name: Define MinIO client package path
+- name: Remember MinIO client package path
   ansible.builtin.set_fact:
     _minio_client_deb_path: "{{ minio_installer_dir }}/minio-client.deb"
 
-- name: Ensure MinIO installer directory exists
+- name: Create MinIO installer directory
   ansible.builtin.file:
     path: "{{ minio_installer_dir }}"
     state: directory
@@ -12,7 +12,7 @@
     mode: "0755"
   become: true
 
-- name: Download the MinIO client package
+- name: Download MinIO client package
   ansible.builtin.get_url:
     url: "{{ minio_client_deb_url }}"
     dest: "{{ _minio_client_deb_path }}"
@@ -25,7 +25,7 @@
     state: present
   become: true
 
-- name: Detect mcli path candidates
+- name: Check possible mcli locations
   ansible.builtin.stat:
     path: "{{ item }}"
   loop:
@@ -33,7 +33,7 @@
     - /usr/bin/mcli
   register: _mcli_stats
 
-- name: Pick existing mcli path
+- name: Select installed mcli path
   ansible.builtin.set_fact:
     _mcli_path: >-
       {{
@@ -45,12 +45,12 @@
         | first) | default('')
       }}
 
-- name: Fail if mcli missing
+- name: Abort when mcli is unavailable
   ansible.builtin.fail:
     msg: "mcli (mc) not found after installation"
   when: _mcli_path == ''
 
-- name: Ensure mc compatibility symlink
+- name: Create compatibility symlink for mc
   ansible.builtin.file:
     src: "{{ _mcli_path }}"
     dest: /usr/local/bin/mc
@@ -58,7 +58,7 @@
     mode: "0755"
   become: true
 
-- name: Ensure root mc config dir exists
+- name: Create root mc configuration directory
   ansible.builtin.file:
     path: /root/.mc
     state: directory
@@ -67,16 +67,16 @@
     mode: "0700"
   become: true
 
-- name: MC | Build command
+- name: Build mc command template
   ansible.builtin.set_fact:
     mc_command: "/usr/local/bin/mc{{ '' if minio_validate_certificate else ' --insecure' }} --config-dir /root/.mc"
 
-- name: MC | Ensure minio_url
+- name: Set default MinIO URL when missing
   ansible.builtin.set_fact:
     minio_url: "http://{{ ansible_default_ipv4.address | default(ansible_host) }}:{{ minio_server_port }}"
   when: (minio_url | default('')) == ''
 
-- name: MC | Wait for MinIO to be up (best-effort)
+- name: Wait for MinIO service availability
   ansible.builtin.wait_for:
     host: "{{ ansible_default_ipv4.address | default(ansible_host) }}"
     port: "{{ minio_server_port | int }}"
@@ -86,7 +86,7 @@
   failed_when: false
   become: true
 
-- name: MC | Check existing alias
+- name: Check existing MinIO alias
   ansible.builtin.command: >
     {{ mc_command }} alias ls {{ minio_alias }}
   register: _mc_alias_check
@@ -94,7 +94,7 @@
   changed_when: false
   become: true
 
-- name: MC | Configure MinIO alias
+- name: Configure MinIO alias
   ansible.builtin.command: >
     {{ mc_command }} alias set {{ minio_alias }}
     {{ minio_url }} {{ minio_root_user }} {{ minio_root_password }}

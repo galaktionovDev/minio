@@ -1,18 +1,18 @@
 ---
-- name: Detect host role
+- name: Determine if host acts as load balancer
   ansible.builtin.set_fact:
     minio_is_lb: "{{ (minio_lb_group in group_names) | bool }}"
 
-- name: Run LB scenario
+- name: Run load balancer tasks
   ansible.builtin.include_tasks: minio_lb.yml
   when:
     - minio_enable_lb | default(true) | bool
     - minio_is_lb | bool
 
-- name: Stop role on LB host
+- name: Stop processing after load balancer setup
   ansible.builtin.meta: end_host
   when:
     - minio_is_lb | bool
 
-- name: Run nodes scenario
+- name: Run storage node tasks
   ansible.builtin.include_tasks: minio_nodes.yml

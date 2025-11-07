@@ -1,16 +1,16 @@
 ---
-- name: Derive datadirs from minio_extra_disks (force override)
+- name: Build data directory list from extra disks
   ansible.builtin.set_fact:
     minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
   when: (minio_extra_disks | default([])) | length > 0
   changed_when: false
 
-- name: Ensure minio group
+- name: Create MinIO system group
   ansible.builtin.group:
     name: "{{ minio_group }}"
     state: present
 
-- name: Ensure minio user
+- name: Create MinIO system user
   ansible.builtin.user:
     name: "{{ minio_user }}"
     group: "{{ minio_group }}"
@@ -18,20 +18,20 @@
     create_home: false
     shell: /usr/sbin/nologin
 
-- name: Preconf | Prepare data disks
+- name: Prepare data disks
   ansible.builtin.include_tasks: prepare_disks.yml
 
-- name: Install / configure MinIO server (package)
+- name: Install MinIO server package
   ansible.builtin.include_tasks: install_server.yml
   when: minio_install_server | bool
 
-- name: Configure MinIO server
+- name: Configure MinIO server service
   ansible.builtin.include_tasks: configure_server.yml
   when: minio_install_server | bool
 
-- name: Install / configure MinIO client
+- name: Install and configure MinIO client
   ansible.builtin.include_tasks: install_client.yml
   when: minio_install_client | bool
 
-- name: Report stats
+- name: Share MinIO deployment facts
   ansible.builtin.include_tasks: stats.yml

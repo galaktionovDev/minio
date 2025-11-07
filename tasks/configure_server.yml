@@ -1,5 +1,5 @@
 ---
-- name: Ensure MinIO etc dir exists
+- name: Create MinIO configuration directory
   ansible.builtin.file:
     path: "{{ minio_etc_dir }}"
     state: directory
@@ -7,14 +7,14 @@
     group: "{{ minio_group }}"
     mode: "0750"
 
-- name: Validate mode and cluster params
+- name: Validate cluster mode settings
   ansible.builtin.assert:
     that:
       - minio_cluster_mode in ['Single Instance', 'High Availability']
       - (minio_cluster_mode == 'Single Instance') or ((minio_cluster_mode == 'High Availability') and (groups['minio_cluster'] | length) >= 1)
     fail_msg: "Некорректные параметры кластера MinIO"
 
-- name: Render MinIO env
+- name: Render MinIO environment file
   template:
     src: minio.env.j2
     dest: "{{ minio_server_envfile }}"
@@ -23,7 +23,7 @@
     mode: "0640"
   notify: Restart minio
 
-- name: Install systemd unit
+- name: Deploy MinIO systemd unit
   ansible.builtin.template:
     src: minio.service.j2
     dest: /etc/systemd/system/minio.service
@@ -31,7 +31,7 @@
     group: root
     mode: "0644"
 
-- name: Enable and start MinIO
+- name: Enable and start MinIO service
   ansible.builtin.systemd:
     name: minio
     state: started
