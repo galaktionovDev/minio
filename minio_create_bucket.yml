@@ -2,6 +2,7 @@
   hosts: nodes
   gather_facts: false
   tasks:
-    - import_role:
+    - name: Импорт задач создания бакетов MinIO
+      ansible.builtin.import_role:
         name: .
         tasks_from: create_minio_buckets.yml

@@ -2,6 +2,7 @@
   hosts: nodes
   gather_facts: false
   tasks:
-    - import_role:
+    - name: Импорт задач удаления бакетов MinIO
+      ansible.builtin.import_role:
         name: .
         tasks_from: delete_minio_bucket.yml
