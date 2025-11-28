@@ -83,11 +83,11 @@
 - name: Render MinIO env on all nodes (mixed DPN)
   template:
     src: "minio.env.j2"
-    dest: "/etc/default/minio"
-    owner: "minio"
-    group: "minio"
-    mode: "0644"
-  notify: "restart minio"
+    dest: "{{ minio_server_envfile }}"
+    owner: "{{ minio_user }}"
+    group: "{{ minio_group }}"
+    mode: "0640"
+  notify: Перезапустить службу MinIO
 
 - name: Rebuild LB backends if LB enabled
   when:
