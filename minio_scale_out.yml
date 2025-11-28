@@ -1,0 +1,33 @@
+---
+- name: MinIO scale-out prechecks (fail-fast)
+  hosts: "{{ minio_cluster_nodes_group | default('node') }}"
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    _primary: "{{ groups[minio_cluster_nodes_group | default('node')][0] }}"
+  tasks:
+    - name: Ensure HA mode
+      assert:
+        that:
+          - minio_cluster_mode == 'High Availability'
+        fail_msg: "Scale-out разрешён только в HA."
+
+    - name: Validate new nodes count is 2..4
+      assert:
+        that:
+          - (minio_new_nodes_count | int) >= 2
+          - (minio_new_nodes_count | int) <= 4
+        fail_msg: "Добавлять можно только 2..4 узла за один проход."
+
+- name: MinIO scale-out (add new server pool)
+  hosts: "{{ minio_cluster_nodes_group | default('node') }}"
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    minio_cluster_nodes_group: "{{ minio_cluster_nodes_group | default('node') }}"
+    minio_lb_group: "{{ minio_lb_group | default('lb') }}"
+  tasks:
+    - name: Run role tasks for scale-out only
+      import_role:
+        name: .
+        tasks_from: scale_out.yml

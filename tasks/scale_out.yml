@@ -1,0 +1,105 @@
+---
+# Роль: minio — сценарий горизонтального масштабирования (server pool)
+
+- name: Select primary node
+  set_fact:
+    _primary: "{{ (groups[minio_cluster_nodes_group | default('node')] | default(ansible_play_hosts_all))[0] }}"
+  run_once: true
+
+- name: Read cluster info (mc admin info --json)
+  command: "{{ minio_mc_bin }} admin info --json {{ minio_alias }}"
+  register: _mc_info
+  changed_when: false
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ _primary }}"
+
+- name: Compute current stripe (fallback to nodes * old_dpn)
+  run_once: true
+  set_fact:
+    _mc_summary: "{{ (_mc_info.stdout_lines | default([]))[-1] | default('{}') | from_json }}"
+    stripe_current: >-
+      {{
+        _mc_summary.get('pools', [{}])[0].get(
+          'erasureStripeSize',
+          (groups[minio_cluster_nodes_group | default('node')] | length) * (minio_old_pool_drives_per_node | int)
+        )
+      }}
+
+- name: Derive new pool drives_per_node
+  run_once: true
+  vars:
+    _raw0: "{{ (minio_new_nodes_raw | default([])) | first | default({}) }}"
+    _new_extras: >-
+      {{
+        _raw0.get('config', {}).get('extra_disks', [])
+        if (_raw0.get('config') is defined)
+        else _raw0.get('item_config', {}).get('extra_disks', [])
+      }}
+  set_fact:
+    minio_new_pool_drives_per_node: "{{ (_new_extras | length) | default(minio_old_pool_drives_per_node, true) | int }}"
+
+- name: Validate stripe compatibility (optional)
+  when: (minio_enforce_stripe_match | default(true)) | bool
+  assert:
+    that:
+      - (minio_new_nodes_count | int) * (minio_new_pool_drives_per_node | int) == (stripe_current | int)
+    fail_msg: >-
+      Новый пул несовместим с текущим erasure stripe (S={{ stripe_current }}).
+      Требуется: new_nodes_count * new_pool_dpn == S.
+  run_once: true
+
+- name: Build drives-per-node map (existing -> old_dpn, new -> new_dpn)
+  run_once: true
+  set_fact:
+    minio_drives_per_node_map: >-
+      {{
+        dict( (minio_existing_nodes_raw | map(attribute='hostname') | list)
+              | zip( [minio_old_pool_drives_per_node|int] * (minio_existing_nodes_raw|length) ) )
+        | combine(
+            dict(
+              (
+                (minio_new_nodes_raw | map(attribute='config') | map(attribute='hostname') | list)
+                if (minio_new_nodes_raw|length>0 and (minio_new_nodes_raw.0.config is defined))
+                else (minio_new_nodes_raw | map(attribute='item_config') | map(attribute='hostname') | list)
+              )
+              | zip( [minio_new_pool_drives_per_node|int] * (minio_new_nodes_raw|length) )
+            )
+          )
+      }}
+
+- name: Distribute DPN map to all nodes
+  set_fact:
+    minio_drives_per_node_map: "{{ hostvars[inventory_hostname].minio_drives_per_node_map | default(hostvars[_primary].minio_drives_per_node_map) }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups[minio_cluster_nodes_group | default('node')] | default(ansible_play_hosts_all) }}"
+  run_once: true
+
+# На новых узлах все базовые задачи роли уже идемпотентны — прогоняем для подготовки
+- name: Prepare data disks, install server and client (idempotent)
+  import_tasks: "minio_nodes.yml"
+
+# Перегенерируем env на всех нодах кластера уже с учётом полного списка volumes
+- name: Render MinIO env on all nodes (mixed DPN)
+  template:
+    src: "minio.env.j2"
+    dest: "/etc/default/minio"
+    owner: "minio"
+    group: "minio"
+    mode: "0644"
+  notify: "restart minio"
+
+- name: Rebuild LB backends if LB enabled
+  when:
+    - (minio_enable_lb | default(false)) | bool
+    - (groups[minio_lb_group | default('lb')] | default([])) | length > 0
+  run_once: true
+  import_tasks: "minio_lb_build_backends.yml"
+
+- name: Start manual rebalance (optional)
+  when: (minio_rebalance_after_scale | default(false)) | bool
+  command: "{{ minio_mc_bin }} admin rebalance start {{ minio_alias }}"
+  register: _rebalance_start
+  changed_when: "'Started' in (_rebalance_start.stdout | default(''))"
+  run_once: true
+  delegate_to: "{{ _primary }}"

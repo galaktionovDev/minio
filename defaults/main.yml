@@ -52,3 +52,6 @@ minio_lb_console_port: "9001"
 minio_lb_api_domain: ""
 minio_lb_console_domain: ""
 minio_lb_nginx_conf: /etc/nginx/conf.d/minio.conf
+
+minio_enforce_stripe_match: true
+minio_rebalance_after_scale: false
