@@ -21,6 +21,9 @@
 - name: Подготовить диски данных
   ansible.builtin.include_tasks: prepare_disks.yml
 
+- name: Настроить /etc/hosts для MinIO
+  ansible.builtin.include_tasks: minio_hosts.yml
+
 - name: Установить пакет MinIO Server
   ansible.builtin.include_tasks: install_server.yml
   when: minio_install_server | bool
@@ -28,6 +31,9 @@
 - name: Настроить службу MinIO Server
   ansible.builtin.include_tasks: configure_server.yml
   when: minio_install_server | bool
+
+- name: Применить отложенные обработчики MinIO перед настройкой клиента
+  ansible.builtin.meta: flush_handlers
 
 - name: Установить и настроить MinIO Client
   ansible.builtin.include_tasks: install_client.yml

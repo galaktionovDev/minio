@@ -1,4 +1,15 @@
 ---
+- name: Ensure minio group exists
+  ansible.builtin.group:
+    name: "{{ minio_group }}"
+    system: true
+
+- name: Ensure minio user exists
+  ansible.builtin.user:
+    name: "{{ minio_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+
 - name: Запомнить путь к пакету MinIO Server
   ansible.builtin.set_fact:
     _minio_server_deb_path: "{{ minio_installer_dir }}/minio-server.deb"

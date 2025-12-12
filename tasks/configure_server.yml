@@ -10,8 +10,7 @@
 - name: Проверить корректность режима кластера
   ansible.builtin.assert:
     that:
-      - minio_cluster_mode in ['Single Instance', 'High Availability']
-      - (minio_cluster_mode == 'Single Instance') or ((minio_cluster_mode == 'High Availability') and (groups['minio_cluster'] | length) >= 1)
+      - (minio_cluster_mode == 'Single Instance') or ((minio_cluster_mode == 'High Availability') and (groups[minio_cluster_nodes_group] | default([]) | length) >= 1)
     fail_msg: "Некорректные параметры кластера MinIO"
 
 - name: Сгенерировать файл окружения MinIO
@@ -30,10 +29,11 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Перезапустить службу MinIO
 
 - name: Включить и запустить службу MinIO
   ansible.builtin.systemd:
     name: minio
-    state: started
     enabled: true
+    state: "{{ (minio_autostart | default(true)) | ternary('started', 'stopped') }}"
     daemon_reload: true

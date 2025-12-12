@@ -1,0 +1,31 @@
+- name: Построить карту minio-хостов (run_once)
+  run_once: true
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    minio_hosts_map: >-
+      {%- set m = {} -%}
+      {%- set hosts = (minio_all_hosts | default(groups[minio_cluster_nodes_group | default('node')] | sort)) -%}
+      {%- for h in hosts -%}
+        {%- set idx = loop.index -%}
+        {%- set ip = (
+              hostvars[h].minio_node_ip
+              | default(hostvars[h].ansible_host)
+              | default(hostvars[h].ansible_default_ipv4.address)
+              | default(h)
+          ) -%}
+        {%- set _ = m.update({('minio-' ~ idx|string): ip}) -%}
+      {%- endfor -%}
+      {{ m }}
+
+- name: Расшарить карту minio-хостов на все ноды
+  ansible.builtin.set_fact:
+    minio_hosts_map: "{{ hostvars[groups[minio_cluster_nodes_group | default('node')][0]].minio_hosts_map }}"
+
+- name: Прописать minio-хосты в /etc/hosts
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    create: yes
+    regexp: '^[0-9.]+\s+{{ item.key }}$'
+    line: "{{ item.value }} {{ item.key }}"
+  loop: "{{ minio_hosts_map | dict2items }}"
