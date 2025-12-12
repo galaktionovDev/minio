@@ -5,9 +5,11 @@
     daemon_reload: true
 
 - name: Перезапустить службу MinIO
-  ansible.builtin.service:
+  ansible.builtin.systemd:
     name: minio
     state: restarted
+    daemon_reload: true
+  when: minio_autostart | default(true)
 
 - name: Перезапустить службу nginx
   ansible.builtin.service:
