@@ -76,7 +76,7 @@
     connection_url: >-
       {%- set lb_enabled = minio_enable_lb | default(false) -%}
       {%- set lb_candidate = _lb_api_domain if (_lb_api_domain | length) > 0 else _lb_addr -%}
-      {%- set host = lb_candidate if (lb_enabled and (lb_candidate | length) > 0) else _first_addr -%}
+      {%- set host = lb_candidate if (lb_enabled and (lb_candidate | length) > 0) else (_first_addr if not dns_zone else ansible_hostname + '.' + dns_zone) -%}
       {%- set scheme = _scheme -%}
       {%- set port = (minio_lb_api_port | default(_api_port)) if (lb_enabled and (lb_candidate | length) > 0) else _api_port -%}
       {%- if '://' in host -%}
@@ -95,7 +95,7 @@
       {%- set lb_enabled = minio_enable_lb | default(false) -%}
       {%- set console_candidate = (_lb_console_domain if (_lb_console_domain | length) > 0 else _lb_api_domain) -%}
       {%- set lb_candidate = console_candidate if (console_candidate | length) > 0 else _lb_addr -%}
-      {%- set host = lb_candidate if (lb_enabled and (lb_candidate | length) > 0) else _first_addr -%}
+      {%- set host = lb_candidate if (lb_enabled and (lb_candidate | length) > 0) else (_first_addr if not dns_zone else ansible_hostname + '.' + dns_zone) -%}
       {%- set scheme = _scheme -%}
       {%- set port = (minio_lb_console_port | default(_console_port)) if (lb_enabled and (lb_candidate | length) > 0) else _console_port -%}
       {%- if '://' in host -%}
