@@ -1,30 +1,34 @@
 ---
+
 - name: Определить список пакетов nginx
   ansible.builtin.set_fact:
     _minio_lb_debs:
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx-common_1.18.0-6ubuntu14.7_all.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-image-filter_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-perl_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-xslt-filter_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-mail_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-stream_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-http-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/libnginx-mod-stream-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx-core_1.18.0-6ubuntu14.7_amd64.deb"
-      - "{{ nexus_url }}/repository/products-raw/minio/nginx/nginx_1.18.0-6ubuntu14.7_amd64.deb"
+      - "nginx-common_1.18.0-6ubuntu14.7_all.deb"
+      - "libnginx-mod-http-image-filter_1.18.0-6ubuntu14.7_amd64.deb"
+      - "libnginx-mod-http-perl_1.18.0-6ubuntu14.7_amd64.deb"
+      - "libnginx-mod-http-xslt-filter_1.18.0-6ubuntu14.7_amd64.deb"
+      - "libnginx-mod-mail_1.18.0-6ubuntu14.7_amd64.deb"
+      - "libnginx-mod-stream_1.18.0-6ubuntu14.7_amd64.deb"
+      - "libnginx-mod-http-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
+      - "libnginx-mod-stream-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
+      - "nginx-core_1.18.0-6ubuntu14.7_amd64.deb"
+      - "nginx_1.18.0-6ubuntu14.7_amd64.deb"
 
 - name: Загрузить пакеты nginx
   ansible.builtin.get_url:
-    url: "{{ item }}"
-    dest: "/tmp/{{ item | basename }}"
+    url: "{{ nexus_url }}/repository/products-raw/minio/nginx/{{ item }}"
+    dest: "/tmp/{{ item }}"
     mode: "0644"
   loop: "{{ _minio_lb_debs }}"
 
 - name: Установить пакеты nginx
-  ansible.builtin.apt:
-    deb: "/tmp/{{ item | basename }}"
-    state: present
-  loop: "{{ _minio_lb_debs }}"
+  command: "dpkg -i {{ _minio_lb_debs | map('regex_replace', '^', '/tmp/') | join(' ') }}"
+  register: dpkg_result
+  ignore_errors: true
+  changed_when: "'Unpacking' in dpkg_result.stdout"
+
+- name: Fix dependencies
+  command: apt install --fix-broken -y
 
 - name: Запустить и включить nginx
   ansible.builtin.service:
