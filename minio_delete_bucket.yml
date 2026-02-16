@@ -1,6 +1,7 @@
 - name: Удалить бакеты MinIO
   hosts: nodes
   gather_facts: false
+  become: true
   tasks:
     - name: Импорт задач удаления бакетов MinIO
       ansible.builtin.import_role:
