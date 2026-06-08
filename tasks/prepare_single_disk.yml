@@ -1,8 +1,14 @@
 ---
-- name: Проверить, смонтирована ли уже целевая директория данных
+- name: Собрать текущее состояние диска
   ansible.builtin.set_fact:
-    _psd_already_ok: "{{ ansible_mounts | selectattr('mount', 'equalto', item.value) | list | length > 0 }}"
     _psd_mounts_by_dev: "{{ ansible_mounts | selectattr('device', 'equalto', item.key) | list }}"
+    _psd_mounts_by_path: "{{ ansible_mounts | selectattr('mount', 'equalto', item.value) | list }}"
+    _psd_already_ok: >-
+      {{
+        (ansible_mounts | selectattr('device', 'equalto', item.key) | list | length > 0)
+        and
+        (ansible_mounts | selectattr('mount', 'equalto', item.value) | list | length > 0)
+      }}
   changed_when: false
 
 - name: Создать каталог монтирования при необходимости
