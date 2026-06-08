@@ -2,20 +2,20 @@
 
 upstream minio_api {
 {% for ip in _minio_lb_backends %}
-    server {{ ip }}:{{ minio_lb_api_port }} max_fails=3 fail_timeout=30s;
+    server {{ ip }}:{{ minio_server_port | default('9000') }} max_fails=3 fail_timeout=30s;
 {% endfor %}
     keepalive 32;
 }
 
 upstream minio_console {
 {% for ip in _minio_lb_backends %}
-    server {{ ip }}:{{ minio_lb_console_port }} max_fails=3 fail_timeout=30s;
+    server {{ ip }}:{{ minio_console_port | default('9001') }} max_fails=3 fail_timeout=30s;
 {% endfor %}
     keepalive 16;
 }
 
 # --- HTTP -> порт API (например :9000) ---
-{% if (minio_lb_api_domain|default('')) %}
+{% if minio_lb_api_domain|default('') and (minio_lb_api_port | int) != 80 %}
 server {
     listen 80;
     server_name {{ minio_lb_api_domain }};
@@ -24,7 +24,7 @@ server {
 {% endif %}
 
 # --- HTTP -> порт Console (например :9001) ---
-{% if (minio_lb_console_domain|default('')) %}
+{% if minio_lb_console_domain|default('') and (minio_lb_console_port | int) != 80 %}
 server {
     listen 80;
     server_name {{ minio_lb_console_domain }};
@@ -36,6 +36,8 @@ server {
     listen {{ minio_lb_api_listen }};
     {% if minio_lb_api_domain|default('') %}server_name {{ minio_lb_api_domain }};{% endif %}
     client_max_body_size 0;
+    proxy_buffering off;
+    proxy_request_buffering off;
 
     location / {
         proxy_set_header Host $http_host;
@@ -56,6 +58,9 @@ server {
     listen {{ minio_lb_console_listen }};
     {% if minio_lb_console_domain|default('') %}server_name {{ minio_lb_console_domain }};{% endif %}
 
+    client_max_body_size 0;
+    proxy_buffering off;
+
     location / {
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -65,6 +70,9 @@ server {
 
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+
+        proxy_connect_timeout 300;
+        proxy_read_timeout 300;
 
         proxy_pass http://minio_console;
     }

@@ -1,14 +1,8 @@
 ---
-- name: Собрать текущее состояние диска
+- name: Проверить, смонтирована ли уже целевая директория данных
   ansible.builtin.set_fact:
+    _psd_already_ok: "{{ ansible_mounts | selectattr('mount', 'equalto', item.value) | list | length > 0 }}"
     _psd_mounts_by_dev: "{{ ansible_mounts | selectattr('device', 'equalto', item.key) | list }}"
-    _psd_mounts_by_path: "{{ ansible_mounts | selectattr('mount', 'equalto', item.value) | list }}"
-    _psd_already_ok: >-
-      {{
-        (ansible_mounts | selectattr('device', 'equalto', item.key) | list | length > 0)
-        and
-        (ansible_mounts | selectattr('mount', 'equalto', item.value) | list | length > 0)
-      }}
   changed_when: false
 
 - name: Создать каталог монтирования при необходимости
@@ -42,16 +36,8 @@
     fstype: xfs
     dev: "{{ item.key }}"
     force: "{{ (minio_preconf_wipe_disks | default(false)) | bool }}"
-    opts: "-m reflink=0"
+    opts: "{{ omit if ansible_os_family == 'RedHat' else '-m reflink=0' }}"
   when: not _psd_already_ok
-
-- name: Проверить наличие каталога с нужными правами
-  ansible.builtin.file:
-    path: "{{ item.value }}"
-    state: directory
-    owner: "{{ minio_user | default('minio') }}"
-    group: "{{ minio_group | default('minio') }}"
-    mode: "0750"
 
 - name: Получить UUID устройства
   ansible.builtin.command: "blkid -o value -s UUID {{ item.key }}"
@@ -65,3 +51,11 @@
     fstype: xfs
     opts: "defaults,noatime,nodiratime"
     state: mounted
+
+- name: Проверить наличие каталога с нужными правами
+  ansible.builtin.file:
+    path: "{{ item.value }}"
+    state: directory
+    owner: "{{ minio_user | default('minio') }}"
+    group: "{{ minio_group | default('minio') }}"
+    mode: "0750"

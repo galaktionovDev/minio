@@ -29,11 +29,44 @@
     owner: root
     group: root
     mode: "0644"
+  register: _minio_service_unit
   notify: Перезапустить службу MinIO
+
+- name: Configure | Перезапустить systemd daemon (при необходимости)
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: 
+    - _minio_service_unit is defined
+    - _minio_service_unit.changed
 
 - name: Включить и запустить службу MinIO
   ansible.builtin.systemd:
     name: minio
     enabled: true
     state: "{{ (minio_autostart | default(true)) | ternary('started', 'stopped') }}"
-    daemon_reload: true
+
+- name: Configure | РЕД ОС 8 | Открыть порты MinIO в Firewalld
+  firewalld:
+    port: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop:
+    - "{{ minio_server_port | default('9000') }}/tcp"
+    - "{{ minio_console_port | default('9001') }}/tcp"
+  when: ansible_os_family == 'RedHat'
+  ignore_errors: true
+
+- name: Configure | РЕД ОС 8 | Полностью разрешить межкластерный трафик между нодами MinIO
+  firewalld:
+    rich_rule: 'rule family="ipv4" source address="{{ hostvars[item].ansible_host | default(hostvars[item].ansible_default_ipv4.address) }}" accept'
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ groups[minio_cluster_nodes_group | default('node')] | default([]) }}"
+  when: 
+    - ansible_os_family == 'RedHat'
+    - (groups[minio_cluster_nodes_group | default('node')] | default([]) | length) > 1
+    - item != inventory_hostname
+  ignore_errors: true
+  

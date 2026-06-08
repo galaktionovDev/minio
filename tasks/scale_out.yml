@@ -65,7 +65,7 @@
     - inventory_hostname == minio_primary_host
     - minio_pools is not defined
   ansible.builtin.slurp:
-    path: "{{ minio_server_envfile | default(minio_etc_dir ~ '/minio.conf') }}"
+    path: "{{ minio_server_envfile | default(minio_etc_dir ~ '/minio.env') }}"
   register: _minio_envfile
 
 - name: Init minio_pools from current MINIO_VOLUMES on primary

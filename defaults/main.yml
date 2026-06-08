@@ -19,7 +19,7 @@ minio_etc_dir: /etc/minio
 minio_cert_dir: "{{ minio_etc_dir }}/ssl"
 minio_policy_dir: "{{ minio_etc_dir }}/policy"
 
-minio_server_envfile: "{{ minio_etc_dir }}/minio.conf"
+minio_server_envfile: "{{ minio_etc_dir }}/minio.env"
 
 minio_server_port: "9000"
 minio_console_port: "9001"
@@ -41,6 +41,8 @@ minio_installer_dir: "/opt/minio/install"
 
 minio_server_deb_url: "{{ nexus_url }}/repository/products-raw/minio/minio_20250907161309.0.0_amd64.deb"
 minio_client_deb_url: "{{ nexus_url }}/repository/products-raw/minio/mcli_20250813083541.0.0_amd64.deb"
+minio_server_rpm_url: "{{ nexus_url }}/yum/el9/minio-20250907161309.0.0-1.x86_64.rpm"
+minio_client_rpm_url: "{{ nexus_url }}/yum/el9//minio/mcli-20250813083541.0.0-1.x86_64.rpm"
 minio_lb_group: "lb"
 minio_cluster_nodes_group: "node"
 

@@ -1,7 +1,7 @@
 ---
 - name: Запомнить путь к пакету MinIO Client
   ansible.builtin.set_fact:
-    _minio_client_deb_path: "{{ minio_installer_dir }}/minio-client.deb"
+    _minio_client_pkg_path: "{{ minio_installer_dir }}/minio-client.{{ 'rpm' if ansible_os_family == 'RedHat' else 'deb' }}"
 
 - name: Создать каталог для установочных файлов
   ansible.builtin.file:
@@ -14,94 +14,30 @@
 
 - name: Скачать пакет MinIO Client
   ansible.builtin.get_url:
-    url: "{{ minio_client_deb_url }}"
-    dest: "{{ _minio_client_deb_path }}"
+    url: "{{ minio_client_rpm_url if ansible_os_family == 'RedHat' else minio_client_deb_url }}"
+    dest: "{{ _minio_client_pkg_path }}"
     mode: "0644"
+  register: _minio_client_download
+  retries: 3
+  delay: 3
   become: true
+  until: _minio_client_download is succeeded
 
-- name: Установить пакет MinIO Client
+- name: Установить пакет MinIO Client via apt (Debian/Ubuntu)
   ansible.builtin.apt:
-    deb: "{{ _minio_client_deb_path }}"
+    deb: "{{ _minio_client_pkg_path }}"
     state: present
-  become: true
+  register: _minio_client_installed_deb
+  when: ansible_os_family == 'Debian'
 
-- name: Проверить расположение бинарника mcli
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop:
-    - /usr/local/bin/mcli
-    - /usr/bin/mcli
-  register: _mcli_stats
+- name: Установить пакет MinIO Client via dnf (RedOS/RHEL)
+  ansible.builtin.dnf:
+    name: "file://{{ _minio_client_pkg_path }}"
+    state: present
+    disable_gpg_check: true
+  register: _minio_client_installed_rpm
+  when: ansible_os_family == 'RedHat'
 
-- name: Определить установленный путь mcli
+- name: Зафиксировать статус установки MinIO Client
   ansible.builtin.set_fact:
-    _mcli_path: >-
-      {{
-        (
-          _mcli_stats.results
-          | selectattr('stat.exists', 'defined')
-          | selectattr('stat.exists')
-          | map(attribute='stat.path')
-          | list
-          | first
-        ) | default('')
-      }}
-
-- name: Прервать выполнение при отсутствии mcli
-  ansible.builtin.fail:
-    msg: "mcli (mc) not found after installation"
-  when: _mcli_path == ''
-
-- name: Создать симлинк совместимости для mc
-  ansible.builtin.file:
-    src: "{{ _mcli_path }}"
-    dest: /usr/local/bin/mc
-    state: link
-    mode: "0755"
-  become: true
-
-- name: Создать каталог конфигурации mc для root
-  ansible.builtin.file:
-    path: /root/.mc
-    state: directory
-    owner: root
-    group: root
-    mode: "0700"
-  become: true
-
-- name: Сформировать шаблон команды mc
-  ansible.builtin.set_fact:
-    mc_command: "/usr/local/bin/mc{{ '' if minio_validate_certificate else ' --insecure' }} --config-dir /root/.mc"
-
-- name: Установить значение URL MinIO по умолчанию
-  ansible.builtin.set_fact:
-    minio_url: "http://{{ ansible_default_ipv4.address | default(ansible_host) }}:{{ minio_server_port }}"
-  when: (minio_url | default('')) == ''
-
-- name: Дождаться доступности службы MinIO
-  ansible.builtin.wait_for:
-    host: "{{ ansible_default_ipv4.address | default(ansible_host) }}"
-    port: "{{ minio_server_port | int }}"
-    connect_timeout: 2
-    timeout: 15
-  register: _mc_wait
-  failed_when: false
-  become: true
-  when: minio_autostart | default(true)
-
-- name: Проверить существующий алиас MinIO
-  ansible.builtin.command: >-
-    {{ mc_command }} alias ls {{ minio_alias }}
-  register: _mc_alias_check
-  failed_when: false
-  changed_when: false
-  become: true
-  when: minio_autostart | default(true)
-
-- name: Настроить алиас MinIO
-  ansible.builtin.command: >-
-    {{ mc_command }} alias set {{ minio_alias }} {{ minio_url }}
-    {{ minio_root_user }} {{ minio_root_password }}
-  register: _mc_alias_set
-  changed_when: "'Added' in _mc_alias_set.stdout or 'Updated' in _mc_alias_set.stdout"
-  ignore_errors: true
+    _minio_client_installed: "{{ _minio_client_installed_rpm if ansible_os_family == 'RedHat' else _minio_client_installed_deb }}"

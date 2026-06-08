@@ -9,7 +9,7 @@
 - name: Выбрать узел для работы с бакетами
   run_once: true
   ansible.builtin.set_fact:
-    _mc_host: "{{ groups['nodes'] | first }}"
+    _mc_host: "{{ groups[minio_cluster_nodes_group | default('node')] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
 
 - name: Найти исполняемый файл mc на целевом хосте
@@ -36,6 +36,7 @@
   run_once: true
   when: _alias_check.rc != 0
   delegate_to: "{{ _mc_host }}"
+  no_log: true
   ansible.builtin.shell: |
     MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" alias set "{{ _mc_alias }}" \
       "{{ connection_url | regex_replace('/+$','') }}" \

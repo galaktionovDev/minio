@@ -1,3 +1,4 @@
+---
 - name: Построить карту minio-хостов (run_once)
   run_once: true
   delegate_to: localhost
@@ -26,6 +27,6 @@
   ansible.builtin.lineinfile:
     path: /etc/hosts
     create: yes
-    regexp: '^[0-9.]+\s+{{ item.key }}$'
+    regexp: '(^|\s)[0-9a-fA-F.:]+\s+{{ item.key }}(\s|$)'
     line: "{{ item.value }} {{ item.key }}"
   loop: "{{ minio_hosts_map | dict2items }}"
