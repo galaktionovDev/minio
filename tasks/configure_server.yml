@@ -32,13 +32,6 @@
   register: _minio_service_unit
   notify: Перезапустить службу MinIO
 
-- name: Configure | Перезапустить systemd daemon (при необходимости)
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: 
-    - _minio_service_unit is defined
-    - _minio_service_unit.changed
-
 - name: Включить и запустить службу MinIO
   ansible.builtin.systemd:
     name: minio
