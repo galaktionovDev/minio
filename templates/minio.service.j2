@@ -7,8 +7,7 @@ Wants=network-online.target
 User={{ minio_user }}
 Group={{ minio_group }}
 EnvironmentFile={{ minio_server_envfile }}
-ExecStartPre=/usr/bin/env sh -c 'grep -q "^MINIO_VOLUMES=" {{ minio_server_envfile }} || (echo "Error: MINIO_VOLUMES is not set in {{ minio_server_envfile }}"; exit 1)'
-ExecStart={{ minio_bin_path | default('/usr/bin/minio') }} server $MINIO_OPTS $MINIO_VOLUMES
+ExecStart={{ minio_bin_path }} server $MINIO_OPTS $MINIO_VOLUMES
 Restart=always
 LimitNOFILE=65536
 

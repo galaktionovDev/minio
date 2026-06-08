@@ -19,7 +19,9 @@ minio_etc_dir: /etc/minio
 minio_cert_dir: "{{ minio_etc_dir }}/ssl"
 minio_policy_dir: "{{ minio_etc_dir }}/policy"
 
-minio_server_envfile: "{{ minio_etc_dir }}/minio.env"
+minio_server_envfile: "{{ '/etc/default/minio' if ansible_os_family == 'Debian' else '/etc/minio/minio.env' }}"
+
+minio_bin_path: "{{ '/usr/local/bin/minio' if ansible_os_family == 'Debian' else '/usr/bin/minio' }}"
 
 minio_server_port: "9000"
 minio_console_port: "9001"
