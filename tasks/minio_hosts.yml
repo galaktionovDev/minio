@@ -27,6 +27,6 @@
   ansible.builtin.lineinfile:
     path: /etc/hosts
     create: yes
-    regexp: '(^|\s)[0-9a-fA-F.:]+\s+{{ item.key }}(\s|$)'
+    regexp: '^[0-9.]+\s+{{ item.key }}$'
     line: "{{ item.value }} {{ item.key }}"
   loop: "{{ minio_hosts_map | dict2items }}"
