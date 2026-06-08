@@ -1,35 +1,33 @@
 ---
-- name: Собрать список блочных устройств в формате JSON
-  # Флаг -J возвращает валидный JSON, который легко парсить без регулярных выражений
-  ansible.builtin.command: lsblk -Jdn -o NAME,TYPE,MOUNTPOINT
-  register: _minio_lsblk_json
+- name: Собрать список блочных устройств без монтирования
+  ansible.builtin.command: lsblk -dn -o NAME,TYPE,MOUNTPOINT
+  register: _minio_lsblk
   changed_when: false
 
 - name: Сформировать перечень доступных дисков
+  vars:
+    _rows: "{{ _minio_lsblk.stdout_lines | default([]) }}"
   ansible.builtin.set_fact:
     _minio_all_disks: >-
       {{
-        ( _minio_lsblk_json.stdout | from_json )['blockdevices']
-        | selectattr('type', 'equalto', 'disk')
-        | map(attribute='name')
+        _rows
+        | map('split')
+        | map('list')
+        | selectattr('1', 'equalto', 'disk')
+        | map('first')
         | map('regex_replace', '^', '/dev/')
         | list
       }}
   changed_when: false
 
-- name: Автоматически определить и исключить системный диск
-  ansible.builtin.set_fact:
-    _sys_device: "{{ item.device | regex_replace('[0-9]+$', '') | regex_replace('p[0-9]+$', '') }}"
-  loop: "{{ ansible_mounts }}"
-  when: item.mount == '/'
-  changed_when: false
-
-- name: Исключить системные устройства хранения из обработки
+- name: Исключить системные устройства хранения
   ansible.builtin.set_fact:
     minio_preconf_data_devices: >-
       {{
         _minio_all_disks
-        | reject('equalto', _sys_device)
+        | reject('match', '^/dev/vda$')
+        | reject('match', '^/dev/sda$')
+        | reject('match', '^/dev/nvme0n1$')
         | list
       }}
   changed_when: false
