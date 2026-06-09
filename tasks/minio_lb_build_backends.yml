@@ -17,9 +17,8 @@
     loop_var: _host_item
   vars:
     _this_ip: >-
-      {{ hostvars[_host_item].minio_node_ip
-         | default(hostvars[_host_item].ansible_host)
-         | default(hostvars[_host_item].ansible_default_ipv4.address | default(omit))
+      {{ hostvars[_host_item].ansible_host
+         | default(hostvars[_host_item].ansible_default_ipv4.address)
          | default(_host_item) }}
   when: minio_lb_backends | length == 0
 
