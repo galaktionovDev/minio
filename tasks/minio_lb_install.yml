@@ -12,8 +12,8 @@
       - "libnginx-mod-stream-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
       - "nginx-core_1.18.0-6ubuntu14.7_amd64.deb"
       - "nginx_1.18.0-6ubuntu14.7_amd64.deb"
-    _minio_lb_nexus_base_url: "{{ nexus_url }}/repository/products-raw/minio/nginx/ubuntu"
-    when: ansible_os_family == 'Debian'
+    _minio_lb_nexus_base_url: "{{ nexus_url }}/repository/products-raw/minio/nginx"
+  when: ansible_os_family == 'Debian'
 
 - name: Задать список пакетов Nginx для RedOS 8 (RedHat)
   ansible.builtin.set_fact:
@@ -47,7 +47,7 @@
     name: "{{ _minio_lb_pkgs | map('regex_replace', '^', '/tmp/') | list }}"
     state: present
     disable_gpg_check: true
-  when: ansible_os_family == 'RedHat'
+  when: ansible_distribution.split(' ') | first | lower == 'red'
 
 - name: Запустить и включить nginx
   ansible.builtin.service:
@@ -60,4 +60,4 @@
     name: httpd_can_network_connect
     state: true
     persistent: true
-  when: ansible_os_family == 'RedHat'
+  when: ansible_distribution.split(' ') | first | lower == 'red'
