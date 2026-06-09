@@ -36,7 +36,7 @@
     state: present
     disable_gpg_check: true
   register: _minio_client_installed_rpm
-  when: ansible_os_family == 'RedHat'
+  when: ansible_distribution.split(' ') | first | lower == 'red'
 
 - name: Зафиксировать статус установки MinIO Client
   ansible.builtin.set_fact:
