@@ -30,7 +30,7 @@
 
 - name: Установить пакет MinIO Server via dnf (RedOS/RHEL)
   ansible.builtin.dnf:
-    name: "file://{{ _minio_server_pkg_path }}"
+    name: "{{ _minio_server_pkg_path }}"
     state: present
     disable_gpg_check: true
   register: _minio_server_installed_rpm

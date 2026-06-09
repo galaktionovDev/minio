@@ -20,7 +20,7 @@
     _minio_lb_pkgs:
       - "nginx-1.22.1-2.el9.x86_64.rpm"
       - "nginx-mod-stream-1.22.1-2.el9.x86_64.rpm"
-    _minio_lb_nexus_base_url: "{{ nexus_url }}/yum/el9"
+    _minio_lb_nexus_base_url: "{{ nexus_url }}/repository/products-yum/el9/"
   when: ansible_os_family == 'RedHat'
 
 - name: Загрузить пакеты nginx

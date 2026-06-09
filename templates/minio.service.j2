@@ -1,7 +1,7 @@
 [Unit]
 Description=MinIO Object Storage
-After=network-online.target
-Wants=network-online.target
+After=network-online.target local-fs.target
+Wants=network-online.target local-fs.target
 
 [Service]
 User={{ minio_user }}
@@ -9,6 +9,7 @@ Group={{ minio_group }}
 EnvironmentFile={{ minio_server_envfile }}
 ExecStart={{ minio_bin_path }} server $MINIO_OPTS $MINIO_VOLUMES
 Restart=always
+RestartSec=20
 LimitNOFILE=65536
 
 [Install]
