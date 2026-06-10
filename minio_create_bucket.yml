@@ -1,7 +1,6 @@
 - name: Создать бакеты MinIO
   hosts: nodes
   gather_facts: false
-  become: true
   tasks:
     - name: Импорт задач создания бакетов MinIO
       ansible.builtin.import_role:
