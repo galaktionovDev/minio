@@ -47,7 +47,7 @@
   loop:
     - "{{ minio_server_port | default('9000') }}/tcp"
     - "{{ minio_console_port | default('9001') }}/tcp"
-  when: ansible_os_family == 'RedHat'
+  when: ansible_distribution.split(' ') | first | lower == 'red'
   ignore_errors: true
 
 - name: Configure | РЕД ОС 8 | Полностью разрешить межкластерный трафик между нодами MinIO
@@ -58,7 +58,7 @@
     immediate: true
   loop: "{{ groups[minio_cluster_nodes_group | default('node')] | default([]) }}"
   when: 
-    - ansible_os_family == 'RedHat'
+    - ansible_distribution.split(' ') | first | lower == 'red'
     - (groups[minio_cluster_nodes_group | default('node')] | default([]) | length) > 1
     - item != inventory_hostname
   ignore_errors: true

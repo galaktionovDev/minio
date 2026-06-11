@@ -42,7 +42,7 @@
     fstype: xfs
     dev: "{{ item.key }}"
     force: "{{ (minio_preconf_wipe_disks | default(false)) | bool }}"
-    opts: "{{ omit if ansible_os_family == 'RedHat' else '-m reflink=0' }}"
+    opts: "{{ omit if (ansible_distribution.split(' ') | first | lower == 'red') else '-m reflink=0' }}"
   when: not _psd_already_ok
 
 - name: Получить UUID устройства

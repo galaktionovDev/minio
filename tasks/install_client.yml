@@ -1,7 +1,7 @@
 ---
 - name: Запомнить путь к пакету MinIO Client
   ansible.builtin.set_fact:
-    _minio_client_pkg_path: "{{ minio_installer_dir }}/minio-client.{{ 'rpm' if ansible_os_family == 'RedHat' else 'deb' }}"
+    _minio_client_pkg_path: "{{ minio_installer_dir }}/minio-client.{{ 'rpm' if (ansible_distribution.split(' ') | first | lower == 'red') else 'deb' }}"
 
 - name: Создать каталог для установочных файлов
   ansible.builtin.file:
@@ -14,7 +14,7 @@
 
 - name: Скачать пакет MinIO Client
   ansible.builtin.get_url:
-    url: "{{ minio_client_rpm_url if ansible_os_family == 'RedHat' else minio_client_deb_url }}"
+    url: "{{ minio_client_rpm_url if (ansible_distribution.split(' ') | first | lower == 'red') else minio_client_deb_url }}"
     dest: "{{ _minio_client_pkg_path }}"
     mode: "0644"
   register: _minio_client_download
@@ -40,4 +40,4 @@
 
 - name: Зафиксировать статус установки MinIO Client
   ansible.builtin.set_fact:
-    _minio_client_installed: "{{ _minio_client_installed_rpm if ansible_os_family == 'RedHat' else _minio_client_installed_deb }}"
+    _minio_client_installed: "{{ _minio_client_installed_rpm if (ansible_distribution.split(' ') | first | lower == 'red') else _minio_client_installed_deb }}"

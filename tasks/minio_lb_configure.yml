@@ -2,7 +2,7 @@
 - name: Сформировать конфигурацию nginx для MinIO
   ansible.builtin.template:
     src: minio_lb.nginx.j2
-    dest: "{{ '/etc/nginx/conf.d/minio_lb.conf' if ansible_os_family == 'RedHat' else minio_lb_nginx_conf }}"
+    dest: "{{ '/etc/nginx/conf.d/minio_lb.conf' if (ansible_distribution.split(' ') | first | lower == 'red') else minio_lb_nginx_conf }}"
     owner: root
     group: root
     mode: "0644"
@@ -18,7 +18,7 @@
   ansible.builtin.file:
     path: /etc/nginx/conf.d/welcome.conf
     state: absent
-  when: ansible_os_family == 'RedHat'
+  when: ansible_distribution.split(' ') | first | lower == 'red'
   notify: Перезапустить службу nginx
 
 - name: РЕД ОС 8 | Открыть порты балансировщика в Firewalld
@@ -30,5 +30,5 @@
   loop:
     - "{{ minio_lb_api_port | default('9000') }}"
     - "{{ minio_lb_console_port | default('9001') }}"
-  when: ansible_os_family == 'RedHat'
+  when: ansible_distribution.split(' ') | first | lower == 'red'
   ignore_errors: true
