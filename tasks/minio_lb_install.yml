@@ -57,10 +57,3 @@
     name: nginx
     state: started
     enabled: true
-
-- name: Разрешить Nginx сетевые соединения в SELinux (РЕД ОС 8)
-  ansible.posix.seboolean:
-    name: httpd_can_network_connect
-    state: true
-    persistent: true
-  when: ansible_distribution.split(' ') | first | lower == 'red'
