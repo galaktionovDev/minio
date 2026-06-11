@@ -9,25 +9,30 @@
 - name: Выбрать узел для работы с бакетами
   run_once: true
   ansible.builtin.set_fact:
-    _mc_host: "{{ groups['nodes'] | first }}"
+    _mc_host: "{{ groups[minio_cluster_nodes_group | default('node')] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
 
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
   delegate_to: "{{ _mc_host }}"
+  become: true
   ansible.builtin.shell: |
-    for b in /usr/local/bin/mc /usr/bin/mc /usr/local/bin/mcli /usr/bin/mcli; do
-      [ -x "$b" ] && { echo "$b"; exit 0; }
-    done
-    exit 1
-  register: _mc_bin
+    which mc 2>/dev/null || which mcli 2>/dev/null
+  register: _mc_bin_search
   changed_when: false
+  failed_when: _mc_bin_search.rc != 0
+
+- name: Bucket | Зафиксировать путь к бинарнику mc
+  run_once: true
+  ansible.builtin.set_fact:
+    _mc_bin: "{{ _mc_bin_search.stdout | trim }}"
 
 - name: Проверить, существует ли алиас mc
   run_once: true
   delegate_to: "{{ _mc_host }}"
+  become: true
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
   register: _alias_check
   changed_when: false
   failed_when: false
@@ -36,9 +41,10 @@
   run_once: true
   when: _alias_check.rc != 0
   delegate_to: "{{ _mc_host }}"
+  become: true
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" alias set "{{ _mc_alias }}" \
-      "{{ connection_url | regex_replace('/+$','') }}" \
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
+      {{ connection_url | regex_replace('/+$','') }} \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   register: _alias_set
   changed_when: true
@@ -46,8 +52,9 @@
 - name: Проверить, существует ли бакет
   run_once: true
   delegate_to: "{{ _mc_host }}"
+  become: true
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" stat "{{ _mc_alias }}/{{ bucket_name }}"
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" stat "{{ _mc_alias }}/{{ bucket_name }}" >/dev/null 2>&1
   register: _stat
   changed_when: false
   failed_when: false
@@ -56,8 +63,9 @@
   run_once: true
   when: _stat.rc != 0
   delegate_to: "{{ _mc_host }}"
+  become: true
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
   register: _mb
   changed_when: true
 
