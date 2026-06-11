@@ -17,7 +17,14 @@
   delegate_to: "{{ _mc_host }}"
   become: true
   ansible.builtin.shell: |
-    which mc 2>/dev/null || which mcli 2>/dev/null
+    if which mcli >/dev/null 2>&1; then
+      which mcli
+    elif which mc >/dev/null 2>&1 && mc --version 2>&1 | grep -q "minio"; then
+      which mc
+    else
+      echo "MinIO Client (mc/mcli) not found!" >&2
+      exit 1
+    fi
   register: _mc_bin_search
   changed_when: false
   failed_when: _mc_bin_search.rc != 0
