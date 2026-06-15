@@ -14,13 +14,6 @@
     state: absent
   when: ansible_os_family == 'Debian'
 
-- name: РЕД ОС 8 | Отключить дефолтный welcome-конфиг nginx (при наличии)
-  ansible.builtin.file:
-    path: /etc/nginx/conf.d/welcome.conf
-    state: absent
-  when: ansible_distribution.split(' ') | first | lower == 'red'
-  notify: Перезапустить службу nginx
-
 - name: РЕД ОС 8 | Открыть порты балансировщика в Firewalld
   firewalld:
     port: "{{ item }}/tcp"
@@ -32,3 +25,26 @@
     - "{{ minio_lb_console_port | default('9001') }}"
   when: ansible_distribution.split(' ') | first | lower == 'red'
   ignore_errors: true
+
+- name: РЕД ОС 8 | Разрешить Nginx слушать порт Console (9001) в SELinux
+  community.general.seport:
+    ports: "9001"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: РЕД ОС 8 | Разрешить Nginx слушать порт API (9000) в SELinux
+  community.general.seport:
+    ports: "9000"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: РЕД ОС 8 | Отключить дефолтный welcome-конфиг nginx (при наличии)
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/welcome.conf
+    state: absent
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+  notify: Перезапустить службу nginx
