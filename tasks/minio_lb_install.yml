@@ -28,7 +28,7 @@
       - "python3-libselinux-3.5-1.red80.x86_64.rpm"
       - "python3-libsemanage-3.5-1.red80.x86_64.rpm"
       - "python3-setools-4.4.3-1.red80.x86_64.rpm"
-      - "python3-policycoreutils-3.5-1.red80.noarch.rpm"
+      - "python3-policycoreutils-3.4-7.red80.noarch.rpm"
       - "policycoreutils-python-utils-3.4-7.red80.noarch.rpm"
     _minio_lb_nexus_base_url: "{{ nexus_url }}/repository/products-yum/el9"
   when: ansible_distribution.split(' ') | first | lower == 'red'
