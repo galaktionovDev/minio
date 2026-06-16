@@ -44,7 +44,7 @@
     yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
       "{{ connection_url | regex_replace('/+$','') }}" \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
-    environment:
+  environment:
     TERM: linux
   register: _alias_set
   changed_when: true  
