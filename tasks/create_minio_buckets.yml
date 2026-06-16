@@ -45,7 +45,7 @@
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
     TERM: linux
-    MC_CONFIG_DIR: /root/.mc
+    MC_CONFIG_DIR: "{{ ansible_user_dir }}/.mc"
   register: _alias_set
   changed_when: true
 
