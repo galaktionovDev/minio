@@ -16,7 +16,7 @@
   run_once: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    which mc 2>/dev/null || which mcli 2>/dev/null
+    which mcli 2>/dev/null || which mc 2>/dev/null
   register: _mc_bin_search
   changed_when: false
   failed_when: _mc_bin_search.rc != 0
@@ -41,7 +41,7 @@
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
     export MC_CONFIG_DIR="$HOME/.mc"
-    "{{ _mc_bin }}" --non-interactive alias set "{{ _mc_alias }}" \
+    yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
       {{ connection_url | regex_replace('/+$','') }} \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
