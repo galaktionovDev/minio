@@ -41,7 +41,7 @@
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
     export MC_CONFIG_DIR="$HOME/.mc"
-    "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
+    "{{ _mc_bin }}" --non-interactive alias set "{{ _mc_alias }}" \
       {{ connection_url | regex_replace('/+$','') }} \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
