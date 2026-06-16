@@ -1,5 +1,6 @@
 - name: Создать бакеты MinIO
   hosts: nodes
+  become: true
   gather_facts: false
   tasks:
     - name: Импорт задач создания бакетов MinIO
