@@ -42,12 +42,12 @@
   ansible.builtin.shell: |
     export MC_CONFIG_DIR="$HOME/.mc"
     yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
-      "{{ connection_url | regex_replace('/+$','') }}" \
+      {{ connection_url | regex_replace('/+$','') }} \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
     TERM: linux
   register: _alias_set
-  changed_when: true  
+  changed_when: true
 
 - name: Проверить, существует ли бакет
   run_once: true
