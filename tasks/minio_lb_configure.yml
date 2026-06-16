@@ -42,6 +42,13 @@
     state: present
   when: ansible_distribution.split(' ') | first | lower == 'red'
 
+- name: РЕД ОС 8 | Разрешить Nginx проксировать трафик к бэкендам MinIO
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
 - name: РЕД ОС 8 | Отключить дефолтный welcome-конфиг nginx (при наличии)
   ansible.builtin.file:
     path: /etc/nginx/conf.d/welcome.conf
