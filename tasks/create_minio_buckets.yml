@@ -11,7 +11,7 @@
   ansible.builtin.set_fact:
     _mc_host: "{{ groups['nodes'] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
-    _mc_config_dir: "/root/.mc"
+    _mc_config_dir: "/home/cloud-config-mgmt/.mc"
 
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
