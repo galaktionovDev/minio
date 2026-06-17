@@ -15,6 +15,7 @@
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
   delegate_to: "{{ _mc_host }}"
+  become: false
   ansible.builtin.shell: |
     which mcli 2>/dev/null || which mc 2>/dev/null
   register: _mc_bin_search
