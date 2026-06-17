@@ -37,6 +37,7 @@
 
 - name: Создать алиас mc при отсутствии
   run_once: true
+  become: false
   when: _alias_check.rc != 0
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
