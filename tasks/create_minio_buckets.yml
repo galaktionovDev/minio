@@ -11,7 +11,6 @@
   ansible.builtin.set_fact:
     _mc_host: "{{ groups['nodes'] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
-    _mc_config_dir: "/root/.mc"
 
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
@@ -35,17 +34,27 @@
   ansible.builtin.set_fact:
     _mc_bin: "{{ _mc_bin_search.stdout | trim }}"
 
-- name: Актуализировать алиас mc конфигурации
+- name: Проверить, существует ли алиас mc
   run_once: true
   become: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
+  register: _alias_check
+  changed_when: false
+  failed_when: false
+
+- name: Создать алиас mc при отсутствии
+  run_once: true
+  when: _alias_check.rc != 0
+  delegate_to: "{{ _mc_host }}"
+  ansible.builtin.shell: |
+    export MC_CONFIG_DIR="$HOME/.mc"
     yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
       "{{ connection_url | regex_replace('/+$','') }}" \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
     TERM: linux
-    MC_CONFIG_DIR: "{{ _mc_config_dir }}"
   register: _alias_set
   changed_when: true
 
@@ -54,9 +63,7 @@
   become: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    "{{ _mc_bin }}" stat "{{ _mc_alias }}/{{ bucket_name }}" >/dev/null 2>&1
-  environment:
-    MC_CONFIG_DIR: "{{ _mc_config_dir }}"
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" stat "{{ _mc_alias }}/{{ bucket_name }}" >/dev/null 2>&1
   register: _stat
   changed_when: false
   failed_when: false
@@ -67,9 +74,7 @@
   when: _stat.rc != 0
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    "{{ _mc_bin }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
-  environment:
-    MC_CONFIG_DIR: "{{ _mc_config_dir }}"
+    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
   register: _mb
   changed_when: true
 
