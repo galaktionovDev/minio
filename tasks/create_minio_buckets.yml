@@ -31,7 +31,7 @@
   run_once: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
+    MC_CONFIG_DIR="{{ _mc_config_dir }}" "{{ _mc_bin }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
   register: _alias_check
   changed_when: false
   failed_when: false
@@ -41,8 +41,7 @@
   when: _alias_check.rc != 0
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    export MC_CONFIG_DIR="$HOME/.mc"
-    yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
+    MC_CONFIG_DIR="{{ _mc_config_dir }}" yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
       {{ connection_url | regex_replace('/+$','') }} \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
@@ -64,7 +63,7 @@
   when: _stat.rc != 0
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
+    MC_CONFIG_DIR="{{ _mc_config_dir }}" "{{ _mc_bin }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
   register: _mb
   changed_when: true
 
