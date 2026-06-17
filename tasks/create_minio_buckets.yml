@@ -32,11 +32,12 @@
   run_once: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    MC_CONFIG_DIR="{{ _mc_config_dir }}" yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
+    yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
       {{ connection_url | regex_replace('/+$','') }} \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
     TERM: linux
+    MC_CONFIG_DIR: "{{ _mc_config_dir }}"
   register: _alias_set
   changed_when: false
 
