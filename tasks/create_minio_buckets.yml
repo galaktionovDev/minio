@@ -17,14 +17,7 @@
   delegate_to: "{{ _mc_host }}"
   become: false
   ansible.builtin.shell: |
-    if which mcli >/dev/null 2>&1; then
-        which mcli
-    elif MC_PATH=$(which mc 2>/dev/null) && ! "$MC_PATH" --version 2>&1 | grep -q "Midnight Commander"; then
-        echo "$MC_PATH"
-    else
-        echo "MinIO Client не найден" >&2
-        exit 1
-    fi
+    which mcli 2>/dev/null || which mc 2>/dev/null
   register: _mc_bin_search
   changed_when: false
   failed_when: _mc_bin_search.rc != 0
