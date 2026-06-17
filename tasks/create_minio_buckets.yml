@@ -32,7 +32,7 @@
   become: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
+    "{{ _mc_bin }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
   register: _alias_check
   changed_when: false
   failed_when: false
@@ -56,7 +56,7 @@
   become: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" stat "{{ _mc_alias }}/{{ bucket_name }}" >/dev/null 2>&1
+    "{{ _mc_bin }}" stat "{{ _mc_alias }}/{{ bucket_name }}" >/dev/null 2>&1
   register: _stat
   changed_when: false
   failed_when: false
@@ -67,7 +67,7 @@
   when: _stat.rc != 0
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
+    "{{ _mc_bin }}" mb --ignore-existing "{{ _mc_alias }}/{{ bucket_name }}"
   register: _mb
   changed_when: true
 
