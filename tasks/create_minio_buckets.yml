@@ -11,6 +11,7 @@
   ansible.builtin.set_fact:
     _mc_host: "{{ groups['nodes'] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
+    _mc_config_dir: "/root/.mc"
 
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
@@ -41,7 +42,7 @@
   when: _alias_check.rc != 0
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
-    MC_CONFIG_DIR="{{ _mc_config_dir }}" yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
+    MC_CONFIG_DIR=/root/.mc yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
       {{ connection_url | regex_replace('/+$','') }} \
       "{{ minio_root_user }}" "{{ minio_root_password }}"
   environment:
