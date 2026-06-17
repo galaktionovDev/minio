@@ -11,7 +11,7 @@
   ansible.builtin.set_fact:
     _mc_host: "{{ groups['nodes'] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
-    _mc_config_dir: "/home/{{ ansible_user | default('cloud-config-mgmt') }}/.mc"
+    _mc_config_dir: "/root/.mc"
 
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
@@ -30,7 +30,7 @@
 
 - name: Актуализировать алиас mc конфигурации
   run_once: true
-  become: false
+  become: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
     yes | "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
@@ -44,7 +44,7 @@
 
 - name: Проверить, существует ли бакет
   run_once: true
-  become: false
+  become: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
     "{{ _mc_bin }}" stat "{{ _mc_alias }}/{{ bucket_name }}" >/dev/null 2>&1
@@ -56,7 +56,7 @@
 
 - name: Создать бакет при отсутствии
   run_once: true
-  become: false
+  become: true
   when: _stat.rc != 0
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
