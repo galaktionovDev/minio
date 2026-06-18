@@ -15,6 +15,7 @@
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
   delegate_to: "{{ _mc_host }}"
+  become: false
   ansible.builtin.shell: |
     for b in /usr/local/bin/mcli /usr/bin/mcli /usr/local/bin/mc /usr/bin/mc ; do
       [ -x "$b" ] && { echo "$b"; exit 0; }
