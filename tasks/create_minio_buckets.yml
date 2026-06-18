@@ -29,15 +29,6 @@
   ansible.builtin.set_fact:
     _mc_bin: "{{ _mc_bin_search.stdout | trim }}"
 
-- name: Проверить, существует ли алиас mc
-  run_once: true
-  delegate_to: "{{ _mc_host }}"
-  ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin.stdout }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
-  register: _alias_check
-  changed_when: false
-  failed_when: false
-
 - name: Создать алиас mc при отсутствии
   run_once: true
   when: _alias_check.rc != 0
