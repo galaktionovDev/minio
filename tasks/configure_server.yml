@@ -29,6 +29,7 @@
     owner: root
     group: root
     mode: "0644"
+  register: _minio_service_unit
   notify: Перезапустить службу MinIO
 
 - name: Включить и запустить службу MinIO
@@ -36,4 +37,43 @@
     name: minio
     enabled: true
     state: "{{ (minio_autostart | default(true)) | ternary('started', 'stopped') }}"
-    daemon_reload: true
+
+- name: Открыть порты MinIO в Firewalld (Red OS)
+  firewalld:
+    port: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop:
+    - "{{ minio_server_port | default('9000') }}/tcp"
+    - "{{ minio_console_port | default('9001') }}/tcp"
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Полностью разрешить межкластерный трафик между нодами MinIO (Red OS)
+  firewalld:
+    rich_rule: 'rule family="ipv4" source address="{{ hostvars[item].ansible_host | default(hostvars[item].ansible_default_ipv4.address) }}" accept'
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ groups[minio_cluster_nodes_group | default('node')] | default([]) }}"
+  when: 
+    - ansible_distribution.split(' ') | first | lower == 'red'
+    - (groups[minio_cluster_nodes_group | default('node')] | default([]) | length) > 1
+    - item != inventory_hostname
+
+- name: Set SELinux context for node_exporter executable
+  community.general.sefcontext:
+    target: "{{ node_exporter_path }}/{{ node_exporter_name }}/node_exporter"
+    setype: bin_t
+    state: present
+  register: selinux_fcontext
+  when: 
+    - ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Apply SELinux context to node_exporter executable
+  ansible.builtin.command:
+    cmd: "restorecon -v {{ node_exporter_path }}/{{ node_exporter_name }}/node_exporter"
+  when: 
+    - ansible_distribution.split(' ') | first | lower == 'red'
+    - selinux_fcontext.changed
+  notify: restart_node_exporter

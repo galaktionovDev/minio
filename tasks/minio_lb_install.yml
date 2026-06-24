@@ -1,8 +1,7 @@
 ---
-
 - name: Определить список пакетов nginx
   ansible.builtin.set_fact:
-    _minio_lb_debs:
+    _minio_lb_pkgs:
       - "nginx-common_1.18.0-6ubuntu14.7_all.deb"
       - "libnginx-mod-http-image-filter_1.18.0-6ubuntu14.7_amd64.deb"
       - "libnginx-mod-http-perl_1.18.0-6ubuntu14.7_amd64.deb"
@@ -13,22 +12,59 @@
       - "libnginx-mod-stream-geoip2_1.18.0-6ubuntu14.7_amd64.deb"
       - "nginx-core_1.18.0-6ubuntu14.7_amd64.deb"
       - "nginx_1.18.0-6ubuntu14.7_amd64.deb"
+    _minio_lb_nexus_base_url: "{{ nexus_url }}/repository/products-raw/minio/nginx"
+  when: ansible_os_family == 'Debian'
+
+- name: Задать список пакетов Nginx и Policycoreutils-python-utils (Red OS)
+  ansible.builtin.set_fact:
+    _minio_lb_pkgs:
+      - "nginx-1.25.4-1.red80.x86_64.rpm"
+      - "nginx-core-1.25.4-1.red80.x86_64.rpm"
+      - "nginx-filesystem-1.25.4-1.red80.noarch.rpm"
+      - "nginx-mimetypes-2.1.53-3.red80.noarch.rpm"
+      - "gperftools-libs-2.9.1-3.red80.x86_64.rpm"
+      - "checkpolicy-3.5-1.red80.x86_64.rpm"
+      - "python3-audit-3.1.3-1.red80.x86_64.rpm"
+      - "python3-libselinux-3.5-1.red80.x86_64.rpm"
+      - "python3-libsemanage-3.5-1.red80.x86_64.rpm"
+      - "python3-setools-4.4.3-1.red80.x86_64.rpm"
+      - "python3-policycoreutils-3.5-1.red80.noarch.rpm"
+      - "policycoreutils-python-utils-3.5-1.red80.noarch.rpm"
+      - "python3-setuptools-67.7.2-2.red80.noarch.rpm"
+    _minio_lb_nexus_base_url: "{{ nexus_url }}/repository/products-yum/el9"
+  when: ansible_distribution.split(' ') | first | lower == 'red'
 
 - name: Загрузить пакеты nginx
   ansible.builtin.get_url:
-    url: "{{ nexus_url }}/repository/products-raw/minio/nginx/{{ item }}"
+    url: "{{ _minio_lb_nexus_base_url }}/{{ item }}"
     dest: "/tmp/{{ item }}"
     mode: "0644"
-  loop: "{{ _minio_lb_debs }}"
+  loop: "{{ _minio_lb_pkgs }}"
 
-- name: Установить пакеты nginx
-  command: "dpkg -i {{ _minio_lb_debs | map('regex_replace', '^', '/tmp/') | join(' ') }}"
+- name: Установить пакеты nginx через dpkg (Debian/Ubuntu)
+  ansible.builtin.command: "dpkg -i {{ _minio_lb_pkgs | map('regex_replace', '^', '/tmp/') | join(' ') }}"
   register: dpkg_result
   ignore_errors: true
   changed_when: "'Unpacking' in dpkg_result.stdout"
+  when: ansible_os_family == 'Debian'
 
-- name: Fix dependencies
-  command: apt install --fix-broken -y
+- name: Исправить сломанные зависимости apt
+  ansible.builtin.command: apt install --fix-broken -y
+  changed_when: true
+  when: ansible_os_family == 'Debian'
+
+- name: Установить пакеты nginx через dnf (Red OS)
+  ansible.builtin.dnf:
+    name: "{{ _minio_lb_pkgs | map('regex_replace', '^', '/tmp/') | list }}"
+    state: present
+    disable_gpg_check: true
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Установить утилиты для управления SELinux (Red OS)
+  ansible.builtin.dnf:
+    name: policycoreutils-python-utils
+    state: present
+  when: ansible_distribution.split(' ') | first | lower == 'red'
 
 - name: Запустить и включить nginx
   ansible.builtin.service:

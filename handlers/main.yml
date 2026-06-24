@@ -15,3 +15,10 @@
   ansible.builtin.service:
     name: nginx
     state: restarted
+
+- name: Перезапустить службу node_exporter
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: restarted
+    daemon_reload: true
+  listen: restart_node_exporter
