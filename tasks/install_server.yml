@@ -12,7 +12,7 @@
 
 - name: Запомнить путь к пакету MinIO Server
   ansible.builtin.set_fact:
-    _minio_server_deb_path: "{{ minio_installer_dir }}/minio-server.deb"
+    _minio_server_pkg_path: "{{ minio_installer_dir }}/minio-server.{{ 'rpm' if (ansible_distribution.split(' ') | first | lower == 'red') else 'deb' }}"
 
 - name: Создать каталог для установочных файлов
   ansible.builtin.file:
@@ -24,19 +24,28 @@
 
 - name: Скачать пакет MinIO Server
   ansible.builtin.get_url:
-    url: "{{ minio_server_deb_url }}"
-    dest: "{{ _minio_server_deb_path }}"
+    url: "{{ minio_server_rpm_url if (ansible_distribution.split(' ') | first | lower == 'red') else minio_server_deb_url }}"
+    dest: "{{ _minio_server_pkg_path }}"
     mode: "0644"
   register: _minio_server_download
   retries: 3
   delay: 3
   until: _minio_server_download is succeeded
 
-- name: Установить пакет MinIO Server
+- name: Установить пакет MinIO Server via apt (Debian/Ubuntu)
   ansible.builtin.apt:
-    deb: "{{ _minio_server_deb_path }}"
+    deb: "{{ _minio_server_pkg_path }}"
     state: present
-  register: _minio_server_installed
+  register: _minio_server_installed_deb
+  when: ansible_os_family == 'Debian'
+
+- name: Установить пакет MinIO Server via dnf (Red OS)
+  ansible.builtin.dnf:
+    name: "{{ _minio_server_pkg_path }}"
+    state: present
+    disable_gpg_check: true
+  register: _minio_server_installed_rpm
+  when: ansible_distribution.split(' ') | first | lower == 'red'
 
 - name: Создать каталоги конфигурации MinIO
   ansible.builtin.file:

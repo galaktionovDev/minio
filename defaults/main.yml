@@ -21,6 +21,7 @@ minio_policy_dir: "{{ minio_etc_dir }}/policy"
 
 minio_server_envfile: "{{ minio_etc_dir }}/minio.conf"
 
+minio_bin_path: "{{ '/usr/bin/env minio' if (ansible_distribution.split(' ') | first | lower == 'red') else '/usr/local/bin/minio' }}"
 minio_server_port: "9000"
 minio_console_port: "9001"
 
@@ -41,6 +42,8 @@ minio_installer_dir: "/opt/minio/install"
 
 minio_server_deb_url: "{{ nexus_url }}/repository/products-raw/minio/minio_20250907161309.0.0_amd64.deb"
 minio_client_deb_url: "{{ nexus_url }}/repository/products-raw/minio/mcli_20250813083541.0.0_amd64.deb"
+minio_server_rpm_url: "{{ nexus_url }}/repository/products-yum/el9/minio-20250907161309.0.0-1.x86_64.rpm"
+minio_client_rpm_url: "{{ nexus_url }}/repository/products-yum/el9/mcli-20250813083541.0.0-1.x86_64.rpm"
 minio_lb_group: "lb"
 minio_cluster_nodes_group: "node"
 
@@ -56,3 +59,7 @@ minio_lb_nginx_conf: /etc/nginx/conf.d/minio.conf
 
 minio_enforce_stripe_match: true
 minio_rebalance_after_scale: false
+
+node_exporter_path: "/app/node_exporter"
+node_exporter_version: "1.7.0"
+node_exporter_name: "node_exporter-{{ node_exporter_version }}.linux-amd64"

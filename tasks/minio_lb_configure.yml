@@ -2,13 +2,72 @@
 - name: Сформировать конфигурацию nginx для MinIO
   ansible.builtin.template:
     src: minio_lb.nginx.j2
-    dest: "{{ minio_lb_nginx_conf }}"
+    dest: "{{ '/etc/nginx/conf.d/minio_lb.conf' if (ansible_distribution.split(' ') | first | lower == 'red') else minio_lb_nginx_conf }}"
     owner: root
     group: root
     mode: "0644"
   notify: Перезапустить службу nginx
 
-- name: Удалить стандартный сайт nginx при наличии
+- name: Удалить стандартный сайт nginx при наличии (Ubuntu)
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
+  when: ansible_os_family == 'Debian'
+
+- name: Открыть порты балансировщика в Firewalld (Red OS)
+  firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop:
+    - "{{ minio_lb_api_port | default('9000') }}"
+    - "{{ minio_lb_console_port | default('9001') }}"
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Разрешить Nginx слушать порт Console (9001) в SELinux (Red OS)
+  community.general.seport:
+    ports: "9001"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Разрешить Nginx слушать порт API (9000) в SELinux (Red OS)
+  community.general.seport:
+    ports: "9000"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Разрешить Nginx проксировать трафик к бэкендам MinIO (Red OS)
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Set SELinux context for node_exporter executable
+  community.general.sefcontext:
+    target: "{{ node_exporter_path }}/{{ node_exporter_name }}/node_exporter"
+    setype: bin_t
+    state: present
+  register: selinux_fcontext
+  when: 
+    - ansible_distribution.split(' ') | first | lower == 'red'
+
+- name: Apply SELinux context to node_exporter executable
+  ansible.builtin.command:
+    cmd: "restorecon -v {{ node_exporter_path }}/{{ node_exporter_name }}/node_exporter"
+  when: 
+    - ansible_distribution.split(' ') | first | lower == 'red'
+    - selinux_fcontext.changed
+  notify: restart_node_exporter
+
+- name: Отключить дефолтный welcome-конфиг nginx (при наличии) (Red OS)
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/welcome.conf
+    state: absent
+  when: ansible_distribution.split(' ') | first | lower == 'red'
+  notify: Перезапустить службу nginx

@@ -1,7 +1,7 @@
 ---
 - name: Запомнить путь к пакету MinIO Client
   ansible.builtin.set_fact:
-    _minio_client_deb_path: "{{ minio_installer_dir }}/minio-client.deb"
+    _minio_client_pkg_path: "{{ minio_installer_dir }}/minio-client.{{ 'rpm' if (ansible_distribution.split(' ') | first | lower == 'red') else 'deb' }}"
 
 - name: Создать каталог для установочных файлов
   ansible.builtin.file:
@@ -14,16 +14,29 @@
 
 - name: Скачать пакет MinIO Client
   ansible.builtin.get_url:
-    url: "{{ minio_client_deb_url }}"
-    dest: "{{ _minio_client_deb_path }}"
+    url: "{{ minio_client_rpm_url if (ansible_distribution.split(' ') | first | lower == 'red') else minio_client_deb_url }}"
+    dest: "{{ _minio_client_pkg_path }}"
     mode: "0644"
+  register: _minio_client_download
+  retries: 3
+  delay: 3
   become: true
+  until: _minio_client_download is succeeded
 
-- name: Установить пакет MinIO Client
+- name: Установить пакет MinIO Client via apt (Debian/Ubuntu)
   ansible.builtin.apt:
-    deb: "{{ _minio_client_deb_path }}"
+    deb: "{{ _minio_client_pkg_path }}"
     state: present
-  become: true
+  register: _minio_client_installed_deb
+  when: ansible_os_family == 'Debian'
+
+- name: Установить пакет MinIO Client via dnf (Red OS)
+  ansible.builtin.dnf:
+    name: "{{ _minio_client_pkg_path }}"
+    state: present
+    disable_gpg_check: true
+  register: _minio_client_installed_rpm
+  when: ansible_distribution.split(' ') | first | lower == 'red'
 
 - name: Проверить расположение бинарника mcli
   ansible.builtin.stat:
