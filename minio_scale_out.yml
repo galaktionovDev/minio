@@ -46,7 +46,7 @@
   tasks:
     - name: Rebuild LB backends and nginx config after scale-out
       when:
-        - minio_enable_lb | default(false) | bool
+        - (minio_enable_lb | default(false) | bool) or (lb_enabled | default(false) | bool)
         - (groups[minio_lb_group | default('lb')] | default([])) | length > 0
       ansible.builtin.import_role:
         name: .
