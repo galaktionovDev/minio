@@ -1,0 +1,12 @@
+---
+- name: Дождаться готовности MinIO после применения конфигурации
+  ansible.builtin.uri:
+    url: "{{ minio_scheme | default('http') }}://{{ ansible_host | default(ansible_default_ipv4.address) }}:{{ minio_server_port }}/minio/health/{{ 'cluster' if minio_cluster_mode == 'High Availability' else 'ready' }}"
+    method: GET
+    status_code: 200
+    validate_certs: "{{ minio_validate_certificate }}"
+    timeout: 5
+  register: _storage_ready
+  retries: 30
+  delay: 3
+  until: _storage_ready.status | default(0) == 200

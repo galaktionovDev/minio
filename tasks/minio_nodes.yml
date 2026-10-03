@@ -1,8 +1,8 @@
 ---
 - name: Собрать каталоги данных из дополнительных дисков
   ansible.builtin.set_fact:
-    minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
-  when: (minio_extra_disks | default([])) | length > 0
+    minio_server_datadirs: "{{ (storage_disks if storage_disks is defined else minio_extra_disks) | map(attribute='mount') | list }}"
+  when: storage_disks is defined or (minio_extra_disks | default([])) | length > 0
   changed_when: false
 
 - name: Создать системную группу MinIO
@@ -35,9 +35,17 @@
 - name: Применить отложенные обработчики MinIO перед настройкой клиента
   ansible.builtin.meta: flush_handlers
 
+- name: Проверить готовность нового развертывания
+  ansible.builtin.include_tasks: wait_storage_ready.yml
+  when: minio_require_storage_disks | default(false) | bool
+
 - name: Установить и настроить MinIO Client
   ansible.builtin.include_tasks: install_client.yml
   when: minio_install_client | bool
 
 - name: Опубликовать итоговые данные по установке
   ansible.builtin.include_tasks: stats.yml
+
+- name: Опубликовать состояние хранения по контракту
+  ansible.builtin.include_tasks: storage_stats.yml
+  when: minio_require_storage_disks | default(false) | bool
