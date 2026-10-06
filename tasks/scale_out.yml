@@ -1,193 +1,259 @@
-- name: Select primary node from existing_nodes
+---
+- name: Выбрать основной существующий узел
+  ansible.builtin.set_fact:
+    minio_primary_host: "{{ (existing_nodes | map(attribute='hostname') | list | first) }}"
   run_once: true
-  ansible.builtin.set_fact:
-    minio_primary_host: "{{ (existing_nodes | map(attribute='hostname') | list)[0] }}"
 
-- name: Build cluster host lists and old DPN on primary
+- name: Передать имя основного узла всем участникам
+  ansible.builtin.set_fact:
+    minio_primary_host: "{{ hostvars[ansible_play_hosts_all[0]].minio_primary_host }}"
+
+- name: Собрать состав кластера на основном узле
+  ansible.builtin.set_fact:
+    minio_all_hosts: "{{ groups[minio_cluster_nodes_group | default('node')] | list }}"
+    minio_existing_hosts: "{{ existing_nodes | map(attribute='hostname') | list }}"
+    minio_new_hosts: >-
+      {{ groups[minio_cluster_nodes_group | default('node')]
+         | difference(existing_nodes | map(attribute='hostname') | list)
+         | list }}
   when: inventory_hostname == minio_primary_host
-  vars:
-    _all_hosts: "{{ groups[minio_cluster_nodes_group | default('node')] | sort }}"
-    _existing_hosts: "{{ (existing_nodes | default([])) | map(attribute='hostname') | list }}"
-  ansible.builtin.set_fact:
-    minio_old_pool_drives_per_node: "{{ minio_drives_per_node | default(0) | int }}"
-    minio_all_hosts: "{{ _all_hosts }}"
-    minio_existing_hosts: "{{ _existing_hosts }}"
-    minio_new_hosts: "{{ _all_hosts | difference(_existing_hosts) | list }}"
-    minio_new_nodes_count: "{{ (_all_hosts | difference(_existing_hosts) | list) | length }}"
 
-- name: Derive new pool drives_per_node from gather on primary
-  when: inventory_hostname == minio_primary_host
-  vars:
-    _new_host_sample: "{{ (minio_new_hosts | default([])) | first | default('') }}"
-  ansible.builtin.set_fact:
-    minio_new_pool_drives_per_node: >-
-      {% if _new_host_sample %}
-      {{
-        (hostvars[_new_host_sample].minio_extra_disks
-         | default([])
-         | length) | int
-      }}
-      {% else %}
-      0
-      {% endif %}
+- name: Проверить существующие узлы до подготовки нового пула
+  ansible.builtin.include_tasks: scale_preflight.yml
 
-- name: Build drives-per-node map for all hosts on primary
-  when: inventory_hostname == minio_primary_host
-  ansible.builtin.set_fact:
-    minio_drives_per_node_map: >-
-      {%- set existing = minio_existing_hosts | default([]) -%}
-      {%- set new = minio_new_hosts | default([]) -%}
-      {%- set old_dpn = minio_old_pool_drives_per_node | default(0) | int -%}
-      {%- set new_dpn = minio_new_pool_drives_per_node | default(old_dpn) | int -%}
-      {%- set m = {} -%}
-      {%- for h in existing -%}
-      {%-   set _ = m.update({ h: old_dpn }) -%}
-      {%- endfor -%}
-      {%- for h in new -%}
-      {%-   set _ = m.update({ h: new_dpn }) -%}
-      {%- endfor -%}
-      {{ m }}
+- name: Проверить контракт новых узлов
+  ansible.builtin.assert:
+    that:
+      - hostvars[item].storage_disks is defined
+      - hostvars[item].storage_item_id is defined
+      - hostvars[item].storage_alias is defined
+      - hostvars[item].storage_pool_id is defined
+      - hostvars[item].storage_node_index is defined
+      - (hostvars[item].storage_disks | length) > 0
+    fail_msg: "Для нового узла {{ item }} отсутствует полный контракт хранения"
+  loop: "{{ hostvars[minio_primary_host].minio_new_hosts }}"
+  run_once: true
 
-- name: Build host index map on primary
-  when: inventory_hostname == minio_primary_host
-  vars:
-    _all: "{{ minio_all_hosts | default([]) }}"
-  ansible.builtin.set_fact:
-    minio_host_index_map: >-
-      {%- set m = {} -%}
-      {%- for h in _all -%}
-      {%-   set _ = m.update({ h: loop.index }) -%}
-      {%- endfor -%}
-      {{ m }}
+- name: Проверить одинаковое число дисков в новом пуле
+  ansible.builtin.assert:
+    that:
+      - (hostvars[item].storage_disks | length) == (hostvars[hostvars[minio_primary_host].minio_new_hosts[0]].storage_disks | length)
+    fail_msg: "Все узлы нового пула должны иметь одинаковое число дисков"
+  loop: "{{ hostvars[minio_primary_host].minio_new_hosts }}"
+  run_once: true
 
-- name: Read current MinIO env file on primary (if minio_pools is undefined)
-  when:
-    - inventory_hostname == minio_primary_host
-    - minio_pools is not defined
+- name: Прочитать действующую конфигурацию кластера
   ansible.builtin.slurp:
     path: "{{ minio_server_envfile | default(minio_etc_dir ~ '/minio.conf') }}"
-  register: _minio_envfile
+  register: _minio_current_env
+  when: inventory_hostname == minio_primary_host
+  no_log: true
 
-- name: Init minio_pools from current MINIO_VOLUMES on primary
-  when:
-    - inventory_hostname == minio_primary_host
-    - minio_pools is not defined
-    - _minio_envfile is defined
+- name: Получить действующую строку endpoints и индексы новых узлов
   ansible.builtin.set_fact:
-    minio_pools: >-
-      {%- set content = (_minio_envfile.content | b64decode).splitlines() -%}
-      {%- set line = (content
-                      | select('match','^MINIO_VOLUMES=')
-                      | list
-                      | first
-                      | default('')) -%}
-      {%- if 'MINIO_VOLUMES=' in line -%}
-        {%- set value = line
-                        | regex_replace('^MINIO_VOLUMES=\"(.*)\"$', '\\1')
-                        | regex_replace('^MINIO_VOLUMES=(.*)$', '\\1') -%}
-        {%- set patterns = value.split() -%}
-        {%- set pools = [] -%}
-        {%- for p in patterns -%}
-          {# host_range: minio-{X...Y} #}
-          {%- set hr_str = p
-              | regex_replace('.*minio-{([0-9]+)\\.\\.\\.([0-9]+)}.*', '\\1,\\2') -%}
-          {%- set dr_str = p
-              | regex_replace('.*disk{([0-9]+)\\.\\.\\.([0-9]+)}.*', '\\1,\\2') -%}
-          {%- set hr = hr_str.split(',') -%}
-          {%- set dr = dr_str.split(',') -%}
-          {%- if hr|length == 2 and dr|length == 2 and (hr_str != p) and (dr_str != p) -%}
-            {%- set _ = pools.append({
-              'host_range': [hr[0] | int, hr[1] | int],
-              'drive_range': [dr[0] | int, dr[1] | int]
-            }) -%}
-          {%- endif -%}
-        {%- endfor -%}
-        {{ pools }}
+    minio_current_volumes: >-
+      {%- set content = (_minio_current_env.content | b64decode).splitlines() -%}
+      {%- set line = content | select('match', '^MINIO_VOLUMES=') | list | first | default('') -%}
+      {{ line | regex_replace('^MINIO_VOLUMES="(.*)"$', '\1') | regex_replace('^MINIO_VOLUMES=(.*)$', '\1') }}
+    minio_new_node_indexes: >-
+      {%- set indexes = [] -%}
+      {%- for host in minio_new_hosts -%}
+      {%-   set _ = indexes.append(hostvars[host].storage_node_index | int) -%}
+      {%- endfor -%}
+      {{ indexes }}
+  when: inventory_hostname == minio_primary_host
+
+- name: Сформировать endpoints только новых узлов
+  ansible.builtin.set_fact:
+    minio_new_pool_volumes: >-
+      {{ (minio_scheme | default('http')) ~ '://minio-{'
+         ~ (minio_new_node_indexes | min) ~ '...'
+         ~ (minio_new_node_indexes | max) ~ '}:' ~ (minio_server_port | string)
+         ~ '/app/disk{1...' ~ (hostvars[minio_new_hosts[0]].storage_disks | length) ~ '}' }}
+  when: inventory_hostname == minio_primary_host
+
+- name: Запретить изменение топологии без действующих endpoints
+  ansible.builtin.assert:
+    that:
+      - hostvars[minio_primary_host].minio_current_volumes | length > 0
+    fail_msg: "В действующей конфигурации отсутствует MINIO_VOLUMES"
+  run_once: true
+
+- name: Построить полную топологию и новый пул
+  ansible.builtin.set_fact:
+    minio_runtime_pools: >-
+      {%- set base = [] -%}
+      {%- if storage_pools is defined and (storage_pools | length) > 0 -%}
+      {%-   for pool in storage_pools -%}
+      {%-     set saved = {} -%}
+      {%-     set _ = saved.update(pool) -%}
+      {%-     if 'volumes' not in saved and 'host_range' in saved and 'drive_range' in saved -%}
+      {%-       set volumes = (minio_scheme | default('http')) ~ '://minio-{' ~ saved['host_range'][0] ~ '...' ~ saved['host_range'][1] ~ '}:' ~ (minio_server_port | string) ~ '/app/disk{' ~ saved['drive_range'][0] ~ '...' ~ saved['drive_range'][1] ~ '}' -%}
+      {%-       set _ = saved.update({'volumes': volumes}) -%}
+      {%-     endif -%}
+      {%-     set _ = base.append(saved) -%}
+      {%-   endfor -%}
       {%- else -%}
-        []
+      {%-   for pattern in minio_current_volumes.split() -%}
+      {%-     if pattern != minio_new_pool_volumes -%}
+      {%-     set host_ranges = pattern | regex_findall('minio-\{([0-9]+)\.\.\.([0-9]+)\}') -%}
+      {%-     set drive_ranges = pattern | regex_findall('/app/disk\{([0-9]+)\.\.\.([0-9]+)\}') -%}
+      {%-     set pool_hosts = [] -%}
+      {%-     if host_ranges | length == 1 -%}
+      {%-       for node in minio_observed_nodes -%}
+      {%-         set index = node['alias'].split('-')[-1] | int -%}
+      {%-         if index >= (host_ranges[0][0] | int) and index <= (host_ranges[0][1] | int) -%}
+      {%-           set _ = pool_hosts.append(node['hostname']) -%}
+      {%-         endif -%}
+      {%-       endfor -%}
+      {%-     endif -%}
+      {%-     set drives = ((drive_ranges[0][1] | int) - (drive_ranges[0][0] | int) + 1) if drive_ranges | length == 1 else 0 -%}
+      {%-     set _ = base.append({'id': 'pool-' ~ ((base | length) + 1), 'volumes': pattern,
+              'hosts': pool_hosts, 'drives_per_node': drives}) -%}
+      {%-     endif -%}
+      {%-   endfor -%}
       {%- endif -%}
+      {%- set new_hosts = minio_new_hosts -%}
+      {%- set drives = hostvars[new_hosts[0]].storage_disks | length -%}
+      {%- set pool_id = 'pool-' ~ ((base | length) + 1) -%}
+      {%- set _ = base.append({'id': pool_id, 'volumes': minio_new_pool_volumes,
+            'hosts': new_hosts, 'drives_per_node': drives}) -%}
+      {{ base }}
+    minio_new_pool_drives_per_node: "{{ hostvars[minio_new_hosts[0]].storage_disks | length }}"
+  when: inventory_hostname == minio_primary_host
 
-- name: Build or extend minio_pools on primary (only if there are new hosts)
-  when:
-    - inventory_hostname == minio_primary_host
-    - (minio_new_hosts | default([])) | length > 0
-  vars:
-    _new_hosts: "{{ minio_new_hosts | default([]) }}"
-    _idx_map: "{{ minio_host_index_map | default({}) }}"
-    _new_idx_list: "{{ _new_hosts | map('extract', _idx_map) | list }}"
-    _base_pools: "{{ minio_pools | default([]) }}"
-    _new_dpn: "{{ minio_new_pool_drives_per_node | int }}"
+- name: Сформировать подтверждённый состав узлов по пулам
   ansible.builtin.set_fact:
-    minio_pools: >-
-      {%- if _new_idx_list | length > 0 -%}
-      {{
-        _base_pools
-        + [
-            {
-              'host_range': [
-                (_new_idx_list | min) | int,
-                (_new_idx_list | max) | int
-              ],
-              'drive_range': [1, _new_dpn]
-            }
-          ]
-      }}
-      {%- else -%}
-      {{ _base_pools }}
-      {%- endif %}
+    minio_storage_nodes: >-
+      {%- set nodes = [] -%}
+      {%- for node in minio_observed_nodes -%}
+      {%-   set saved = {} -%}
+      {%-   set _ = saved.update(node) -%}
+      {%-   for pool in minio_runtime_pools -%}
+      {%-     if node['hostname'] in pool['hosts'] -%}
+      {%-       set _ = saved.update({'pool_id': pool['id']}) -%}
+      {%-     endif -%}
+      {%-   endfor -%}
+      {%-   set _ = nodes.append(saved) -%}
+      {%- endfor -%}
+      {%- for host in minio_new_hosts -%}
+      {%-   set _ = nodes.append({'item_id': hostvars[host].storage_item_id,
+            'hostname': host, 'alias': hostvars[host].storage_alias,
+            'pool_id': minio_runtime_pools[-1]['id']}) -%}
+      {%- endfor -%}
+      {{ nodes }}
+  when: inventory_hostname == minio_primary_host
 
-- name: Distribute cluster topology facts to all hosts
+- name: Проверить сохранение действующих endpoints при новом запуске или продолжении
+  ansible.builtin.assert:
+    that:
+      - _old_pools | length > 0
+      - hostvars[minio_primary_host].minio_current_volumes in [_old_volumes, _full_volumes]
+      - (_pool_hosts | sort) == (hostvars[minio_primary_host].minio_all_hosts | sort)
+      - (_pool_hosts | unique | length) == (_pool_hosts | length)
+      - (_pool_ids | unique | length) == (_pool_ids | length)
+    fail_msg: "Существующая топология противоречит описанию пулов; изменение кластера остановлено"
+  vars:
+    _pools: "{{ hostvars[minio_primary_host].minio_runtime_pools }}"
+    _old_pools: "{{ _pools[:-1] }}"
+    _old_volumes: "{{ _old_pools | map(attribute='volumes') | join(' ') }}"
+    _full_volumes: "{{ _pools | map(attribute='volumes') | join(' ') }}"
+    _pool_hosts: "{{ _pools | map(attribute='hosts') | flatten }}"
+    _pool_ids: "{{ _pools | map(attribute='id') | list }}"
+  run_once: true
+
+- name: Проверить описание каждого пула
+  ansible.builtin.assert:
+    that:
+      - item.hosts | length > 0
+      - item.drives_per_node | int > 0
+    fail_msg: "Не удалось однозначно восстановить состав {{ item.id }}"
+  loop: "{{ hostvars[minio_primary_host].minio_runtime_pools }}"
+  run_once: true
+
+- name: Проверить непрерывную нумерацию узлов нового пула
+  ansible.builtin.assert:
+    that:
+      - (_new_indexes | max) - (_new_indexes | min) + 1 == (_new_indexes | length)
+      - (_new_indexes | unique | length) == (_new_indexes | length)
+    fail_msg: "Индексы узлов нового пула должны образовывать непрерывный диапазон"
+  vars:
+    _new_indexes: "{{ hostvars[minio_primary_host].minio_new_node_indexes }}"
+  run_once: true
+
+- name: Распространить топологию на все узлы
   ansible.builtin.set_fact:
     minio_all_hosts: "{{ hostvars[minio_primary_host].minio_all_hosts }}"
-    minio_host_index_map: "{{ hostvars[minio_primary_host].minio_host_index_map }}"
-    minio_pools: "{{ hostvars[minio_primary_host].minio_pools }}"
-    minio_drives_per_node_map: "{{ hostvars[minio_primary_host].minio_drives_per_node_map }}"
+    minio_existing_hosts: "{{ hostvars[minio_primary_host].minio_existing_hosts }}"
     minio_new_hosts: "{{ hostvars[minio_primary_host].minio_new_hosts }}"
+    minio_pools: "{{ hostvars[minio_primary_host].minio_runtime_pools }}"
+    minio_runtime_pools: "{{ hostvars[minio_primary_host].minio_runtime_pools }}"
+    minio_storage_nodes: "{{ hostvars[minio_primary_host].minio_storage_nodes }}"
     minio_effective_drives_per_node: >-
-      {{
-        hostvars[minio_primary_host].minio_drives_per_node_map
-        .get(inventory_hostname, 0) | int
-      }}
+      {{ (storage_disks | length)
+         if storage_disks is defined
+         else (minio_drives_per_node | default(0) | int) }}
 
-- name: Collect datadirs from extra disks on new nodes
+- name: Собрать каталоги данных новых узлов
   ansible.builtin.set_fact:
-    minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
-  when:
-    - inventory_hostname in (minio_new_hosts | default([]))
-    - (minio_extra_disks | default([])) | length > 0
+    minio_server_datadirs: "{{ storage_disks | map(attribute='mount') | list }}"
+  when: inventory_hostname in minio_new_hosts
   changed_when: false
 
-- name: Install MinIO server on new nodes
+- name: Создать группу для новых узлов хранения
+  ansible.builtin.group:
+    name: "{{ minio_group }}"
+    state: present
+  when: inventory_hostname in minio_new_hosts
+
+- name: Создать пользователя для новых узлов хранения
+  ansible.builtin.user:
+    name: "{{ minio_user }}"
+    group: "{{ minio_group }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+  when: inventory_hostname in minio_new_hosts
+
+- name: Подготовить диски новых узлов
+  ansible.builtin.include_tasks: prepare_disks.yml
+  when: inventory_hostname in minio_new_hosts
+
+- name: Установить сервер после подготовки дисков новых узлов
   ansible.builtin.include_tasks: install_server.yml
   when:
     - minio_install_server | bool
-    - inventory_hostname in (minio_new_hosts | default([]))
+    - inventory_hostname in minio_new_hosts
 
-- name: Prepare data disks on new nodes
-  ansible.builtin.include_tasks: prepare_disks.yml
-  when: inventory_hostname in (minio_new_hosts | default([]))
+- name: Проверить существующие монтирования и версии новых серверов
+  ansible.builtin.include_tasks: scale_verify_existing.yml
 
-- name: Install MinIO client on new nodes
-  ansible.builtin.include_tasks: install_client.yml
-  when:
-    - minio_install_client | bool
-    - inventory_hostname in (minio_new_hosts | default([]))
-
-- name: Update /etc/hosts for MinIO on all nodes
+- name: Обновить адреса узлов на всём кластере
   ansible.builtin.include_tasks: minio_hosts.yml
-  when: inventory_hostname in (minio_all_hosts | default(ansible_play_hosts_all))
 
-- name: Enable MinIO autostart for final cluster config
-  ansible.builtin.set_fact:
-    minio_autostart: true
-  when: inventory_hostname in (minio_all_hosts | default(ansible_play_hosts_all))
-
-- name: Stop MinIO on all cluster nodes
+- name: Остановить службу перед изменением топологии
   ansible.builtin.systemd:
     name: minio
     state: stopped
-  when: inventory_hostname in (minio_all_hosts | default(ansible_play_hosts_all))
 
-- name: Reconfigure MinIO server on all nodes with full topology
+- name: Включить автоматический запуск итоговой конфигурации
+  ansible.builtin.set_fact:
+    minio_autostart: true
+
+- name: Применить полную топологию на всех узлах
   ansible.builtin.include_tasks: configure_server.yml
-  when: inventory_hostname in (minio_all_hosts | default(ansible_play_hosts_all))
+
+- name: Применить отложенные обработчики
+  ansible.builtin.meta: flush_handlers
+
+- name: Проверить готовность расширенного кластера
+  ansible.builtin.include_tasks: wait_storage_ready.yml
+
+- name: Установить и настроить клиент на новых узлах
+  ansible.builtin.include_tasks: install_client.yml
+  when:
+    - minio_install_client | bool
+    - inventory_hostname in minio_new_hosts
+
+- name: Опубликовать результат масштабирования
+  ansible.builtin.include_tasks: scale_storage_stats.yml

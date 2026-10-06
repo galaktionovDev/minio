@@ -1,0 +1,83 @@
+---
+- name: Прочитать действующую конфигурацию каждого существующего узла
+  ansible.builtin.slurp:
+    path: "{{ minio_server_envfile }}"
+  register: _minio_existing_env
+  when: inventory_hostname in hostvars[minio_primary_host].minio_existing_hosts
+  no_log: true
+
+- name: Получить endpoints существующего узла
+  ansible.builtin.set_fact:
+    minio_observed_volumes: >-
+      {%- set lines = (_minio_existing_env.content | b64decode).splitlines() -%}
+      {%- set line = lines | select('match', '^MINIO_VOLUMES=') | list | first | default('') -%}
+      {{ line | regex_replace('^MINIO_VOLUMES="(.*)"$', '\1') | regex_replace('^MINIO_VOLUMES=(.*)$', '\1') }}
+  when: inventory_hostname in hostvars[minio_primary_host].minio_existing_hosts
+
+- name: Проверить одинаковые endpoints существующих узлов
+  ansible.builtin.assert:
+    that:
+      - hostvars[item].minio_observed_volumes | length > 0
+      - hostvars[item].minio_observed_volumes == hostvars[minio_primary_host].minio_observed_volumes
+    fail_msg: "Конфигурации существующих узлов различаются; изменение кластера остановлено"
+  loop: "{{ hostvars[minio_primary_host].minio_existing_hosts }}"
+  run_once: true
+
+- name: Прочитать действующие соответствия псевдонимов
+  ansible.builtin.command:
+    argv:
+      - getent
+      - hosts
+      - "minio-{{ item }}"
+  loop: "{{ range(1, (hostvars[minio_primary_host].minio_existing_hosts | length) + 1) | list }}"
+  register: _minio_alias_lookup
+  changed_when: false
+  when: inventory_hostname == minio_primary_host
+
+- name: Восстановить существующую топологию по фактическим адресам
+  ansible.builtin.set_fact:
+    minio_observed_nodes: >-
+      {%- set nodes = [] -%}
+      {%- for host in minio_existing_hosts -%}
+      {%- set matches = [] -%}
+      {%- for lookup in _minio_alias_lookup.results -%}
+      {%- if lookup.stdout.split()[0] == hostvars[host].ansible_host -%}
+      {%- set _ = matches.append('minio-' ~ lookup.item) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- set _ = nodes.append({'item_id': hostvars[host].storage_item_id,
+        'hostname': host, 'alias': matches[0] if matches | length == 1 else '',
+        'pool_id': hostvars[host].storage_pool_id}) -%}
+      {%- endfor -%}
+      {{ nodes }}
+  when: inventory_hostname == minio_primary_host
+
+- name: Проверить однозначное восстановление псевдонимов
+  ansible.builtin.assert:
+    that:
+      - item.alias | length > 0
+      - not (storage_pools | default([]) | length > 0) or item.alias == hostvars[item.hostname].storage_alias
+    fail_msg: "Псевдоним узла {{ item.hostname }} не определён однозначно либо противоречит сохранённой топологии"
+  loop: "{{ hostvars[minio_primary_host].minio_observed_nodes }}"
+  run_once: true
+
+- name: Использовать подтверждённый псевдоним существующего узла
+  ansible.builtin.set_fact:
+    storage_alias: "{{ item.alias }}"
+  loop: "{{ hostvars[minio_primary_host].minio_observed_nodes }}"
+  when: item.hostname == inventory_hostname
+
+- name: Прочитать версии существующих серверов
+  ansible.builtin.command:
+    cmd: "{{ minio_bin_path }} --version"
+  register: _minio_existing_version
+  changed_when: false
+  when: inventory_hostname in hostvars[minio_primary_host].minio_existing_hosts
+
+- name: Проверить одинаковые версии существующих серверов
+  ansible.builtin.assert:
+    that:
+      - hostvars[item]._minio_existing_version.stdout_lines[0] == hostvars[minio_primary_host]._minio_existing_version.stdout_lines[0]
+    fail_msg: "Версии существующих серверов MinIO различаются"
+  loop: "{{ hostvars[minio_primary_host].minio_existing_hosts }}"
+  run_once: true
