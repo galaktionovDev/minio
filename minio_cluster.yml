@@ -1,5 +1,6 @@
 - name: Развернуть кластер MinIO
   hosts: all
   become: true
+  any_errors_fatal: "{{ minio_require_storage_disks | default(false) | bool }}"
   roles:
     - role: .

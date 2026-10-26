@@ -1,8 +1,8 @@
 ---
 - name: Собрать каталоги данных из дополнительных дисков
   ansible.builtin.set_fact:
-    minio_server_datadirs: "{{ minio_extra_disks | map(attribute='mount') | list }}"
-  when: (minio_extra_disks | default([])) | length > 0
+    minio_server_datadirs: "{{ (storage_disks if storage_disks is defined else minio_extra_disks) | map(attribute='mount') | list }}"
+  when: storage_disks is defined or (minio_extra_disks | default([])) | length > 0
   changed_when: false
 
 - name: Создать системную группу MinIO
@@ -41,3 +41,7 @@
 
 - name: Опубликовать итоговые данные по установке
   ansible.builtin.include_tasks: stats.yml
+
+- name: Опубликовать сведения о подготовленных дисках
+  ansible.builtin.include_tasks: storage_stats.yml
+  when: minio_require_storage_disks | default(false) | bool

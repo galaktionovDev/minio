@@ -1,0 +1,14 @@
+---
+- name: Опубликовать сведения о подготовленных дисках
+  ansible.builtin.set_stats:
+    data:
+      storage_disk_report: >-
+        {%- set reports = {} -%}
+        {%- for host in groups[minio_cluster_nodes_group | default('node')] -%}
+        {%- if hostvars[host].minio_storage_disk_report is defined -%}
+        {%- set _ = reports.update({host: hostvars[host].minio_storage_disk_report}) -%}
+        {%- endif -%}
+        {%- endfor -%}
+        {{ reports }}
+    aggregate: false
+  run_once: true
