@@ -106,6 +106,7 @@
   ansible.builtin.command: >-
     {{ mc_command }} alias ls {{ minio_alias }}
   register: _mc_alias_check
+  no_log: true
   failed_when: false
   changed_when: false
   become: true
@@ -117,4 +118,5 @@
     {{ minio_root_user }} {{ minio_root_password }}
   register: _mc_alias_set
   changed_when: "'Added' in _mc_alias_set.stdout or 'Updated' in _mc_alias_set.stdout"
+  no_log: true
   ignore_errors: true
