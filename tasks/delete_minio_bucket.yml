@@ -4,13 +4,20 @@
     that:
       - bucket_name is defined
       - (bucket_name | string) | length > 0
-    fail_msg: "bucket_name is required"
+      - (minio_root_user | default(access_key | default(''), true)) | length > 0
+      - minio_root_password | default('') | length > 0
+    fail_msg: "bucket_name and MinIO root credentials are required"
 
 - name: Выбрать узел для работы с бакетами
   run_once: true
   ansible.builtin.set_fact:
     _mc_host: "{{ groups['nodes'] | first }}"
     _mc_alias: "{{ minio_alias | default('myminio') }}"
+    _mc_connection: >-
+      {{ (connection_url | urlsplit('scheme')) ~ '://' ~
+         (minio_root_user | default(access_key | default(''), true)) ~ ':' ~
+         minio_root_password ~ '@' ~ (connection_url | urlsplit('netloc')) }}
+  no_log: true
 
 - name: Найти исполняемый файл mc на целевом хосте
   run_once: true
@@ -29,33 +36,25 @@
   ansible.builtin.set_fact:
     _mc_bin: "{{ _mc_bin_search.stdout | trim }}"
 
-- name: Проверить, существует ли алиас mc
+- name: Проверить учётные данные MinIO
   run_once: true
   delegate_to: "{{ _mc_host }}"
-  ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" alias ls "{{ _mc_alias }}" >/dev/null 2>&1
-  register: _alias_check
+  ansible.builtin.command:
+    argv:
+      - "{{ _mc_bin }}"
+      - ls
+      - "{{ _mc_alias }}"
+  environment: "{{ {'MC_HOST_' ~ _mc_alias: _mc_connection} }}"
   changed_when: false
-  failed_when: false
-
-- name: Создать алиас mc при отсутствии
-  run_once: true
-  when: _alias_check.rc != 0
-  delegate_to: "{{ _mc_host }}"
-  ansible.builtin.shell: |
-    MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" alias set "{{ _mc_alias }}" \
-      {{ connection_url | regex_replace('/+$','') }} \
-      "{{ minio_root_user }}" "{{ minio_root_password }}"
-  environment:
-    TERM: linux
-  register: _alias_set
-  changed_when: true
+  no_log: true
 
 - name: Проверить, существует ли бакет
   run_once: true
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
     MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" stat "{{ _mc_alias }}/{{ bucket_name }}" >/dev/null 2>&1
+  environment: "{{ {'MC_HOST_' ~ _mc_alias: _mc_connection} }}"
+  no_log: true
   register: _stat
   changed_when: false
   failed_when: false
@@ -66,6 +65,8 @@
   delegate_to: "{{ _mc_host }}"
   ansible.builtin.shell: |
     MC_CONFIG_DIR=/root/.mc "{{ _mc_bin }}" rb --force "{{ _mc_alias }}/{{ bucket_name }}"
+  environment: "{{ {'MC_HOST_' ~ _mc_alias: _mc_connection} }}"
+  no_log: true
   register: _rm
   changed_when: _rm.rc == 0
 
