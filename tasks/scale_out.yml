@@ -8,6 +8,43 @@
   ansible.builtin.set_fact:
     minio_primary_host: "{{ hostvars[ansible_play_hosts_all[0]].minio_primary_host }}"
 
+- name: Проверить наличие учётных данных для масштабирования
+  run_once: true
+  ansible.builtin.assert:
+    that:
+      - minio_root_user | default('') | length > 0
+      - minio_root_password | default('') | length > 0
+      - connection_url | default('') | length > 0
+    fail_msg: "Для масштабирования требуются адрес MinIO и root-учётные данные"
+  no_log: true
+
+- name: Найти mc на существующем узле
+  run_once: true
+  delegate_to: "{{ minio_primary_host }}"
+  ansible.builtin.shell: |
+    for b in /usr/local/bin/mcli /usr/bin/mcli /usr/local/bin/mc /usr/bin/mc; do
+      [ -x "$b" ] && { echo "$b"; exit 0; }
+    done
+    exit 1
+  register: _minio_scale_mc
+  changed_when: false
+
+- name: Проверить root-пароль действующего пула перед масштабированием
+  run_once: true
+  delegate_to: "{{ minio_primary_host }}"
+  ansible.builtin.command:
+    argv: >-
+      {{ [_minio_scale_mc.stdout | trim]
+         + ([] if minio_validate_certificate | default(false) | bool else ['--insecure'])
+         + ['ls', 'minioscalecheck'] }}
+  environment:
+    MC_HOST_minioscalecheck: >-
+      {{ (connection_url | urlsplit('scheme')) ~ '://' ~
+         minio_root_user ~ ':' ~ minio_root_password ~ '@' ~
+         (connection_url | urlsplit('netloc')) }}
+  changed_when: false
+  no_log: true
+
 - name: Собрать состав кластера
   ansible.builtin.set_fact:
     minio_all_hosts: "{{ groups[minio_cluster_nodes_group | default('node')] | list }}"
